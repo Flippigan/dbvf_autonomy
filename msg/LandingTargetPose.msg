@@ -1,0 +1,9 @@
+std_msgs/Header header
+int32 tag_id
+float64 tag_size
+float64 angle_x
+float64 angle_y
+float64 position_x
+float64 position_y
+float64 position_z
+bool position_valid

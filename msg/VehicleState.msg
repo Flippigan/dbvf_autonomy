@@ -1,0 +1,10 @@
+std_msgs/Header header
+string mode
+bool armed
+float64 lat
+float64 lon
+float64 alt_rel
+float64 vx
+float64 vy
+float64 vz
+float64 heading
