@@ -1,0 +1,27 @@
+mavlink_interface:
+  ros__parameters:
+    connection_string: "tcp:127.0.0.1:5760"
+    source_system: 255
+    source_component: 0
+    heartbeat_rate: 1.0
+    vehicle_state_rate: 10.0
+
+tag_detector_adapter:
+  ros__parameters:
+    primary_tag_id: 0
+    secondary_tag_id: 1
+    primary_tag_size: 0.6
+    secondary_tag_size: 0.15
+    debounce_buffer_size: 30
+    debounce_threshold: 0.8
+    detection_topic: "/apriltag/detections"
+
+precision_landing:
+  ros__parameters:
+    approach_altitude: 8.0
+    min_search_altitude: 1.0
+    search_descent_rate: 0.3
+    position_tolerance: 2.0
+    tag_confirm_frames: 5
+    tag_lost_timeout: 4.0
+    landing_timeout: 60.0
