@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# External workspace dependencies (see dependencies.repos)
+# These are cloned into the workspace src/ directory, not tracked here
+# src/apriltag_ros/
+# src/apriltag_msgs/
