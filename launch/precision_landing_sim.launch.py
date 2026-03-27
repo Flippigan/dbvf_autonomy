@@ -1,0 +1,58 @@
+"""Launch precision landing stack for Gazebo simulation.
+
+Prerequisites: iris_runway.launch.py must be running separately.
+"""
+import os
+
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    pkg_dir = get_package_share_directory('dbvf_autonomy')
+    config = os.path.join(pkg_dir, 'config', 'sim_params.yaml')
+
+    return LaunchDescription([
+        # AprilTag detector (subscribes to Gazebo camera bridge topics)
+        Node(
+            package='apriltag_ros',
+            executable='apriltag_node',
+            name='apriltag_node',
+            remappings=[
+                ('image_rect', '/camera/image'),
+                ('camera_info', '/camera/camera_info'),
+                ('detections', '/apriltag/detections'),
+            ],
+            parameters=[{
+                'family': '36h11',
+                'size': 0.6,
+                'tag.ids': [0, 1],
+                'tag.sizes': [0.6, 0.15],
+            }],
+        ),
+
+        # Tag detector adapter
+        Node(
+            package='dbvf_autonomy',
+            executable='tag_detector_adapter_node',
+            name='tag_detector_adapter',
+            parameters=[config],
+        ),
+
+        # MAVLink interface (connects to SITL via TCP)
+        Node(
+            package='dbvf_autonomy',
+            executable='mavlink_interface_node',
+            name='mavlink_interface',
+            parameters=[config],
+        ),
+
+        # Precision landing state machine
+        Node(
+            package='dbvf_autonomy',
+            executable='precision_landing_node',
+            name='precision_landing',
+            parameters=[config],
+        ),
+    ])
