@@ -1,6 +1,7 @@
 from dbvf_autonomy.mavlink_interface_node import (
     ARDUPILOT_MODE_MAP,
     RANGE_ALT_SENTINEL,
+    VELOCITY_TYPE_MASK,
     build_landing_target_params,
     extract_rangefinder_distance,
 )
@@ -55,3 +56,23 @@ def test_range_alt_populated_from_rangefinder():
         distance = 5.43
 
     assert extract_rangefinder_distance(FakeRangefinderMsg()) == 5.43
+
+
+def test_velocity_type_mask():
+    """Velocity-only type_mask has correct bits: pos ignored, vel used, accel ignored, yaw ignored."""
+    # Bits 0-2: position (ignored = 1,1,1)
+    assert VELOCITY_TYPE_MASK & 0b111 == 0b111
+    # Bits 3-5: velocity (used = 0,0,0)
+    assert (VELOCITY_TYPE_MASK >> 3) & 0b111 == 0b000
+    # Bits 6-8: acceleration (ignored = 1,1,1)
+    assert (VELOCITY_TYPE_MASK >> 6) & 0b111 == 0b111
+    # Bit 10: yaw (ignored = 1)
+    assert (VELOCITY_TYPE_MASK >> 10) & 0b1 == 0b1
+    # Bit 11: yaw_rate (ignored = 1)
+    assert (VELOCITY_TYPE_MASK >> 11) & 0b1 == 0b1
+
+
+def test_velocity_frame():
+    """MAV_FRAME_BODY_NED is frame 8 — body-relative NED."""
+    from pymavlink import mavutil
+    assert mavutil.mavlink.MAV_FRAME_BODY_NED == 8

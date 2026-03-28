@@ -62,6 +62,25 @@ def select_best_tag(detections_by_id, primary_id, secondary_id):
     return None, None
 
 
+def _parse_axis(spec):
+    """Parse axis spec like 'x', '-y', 'z' into (axis_index, sign)."""
+    spec = spec.strip().lower()
+    sign = -1.0 if spec.startswith('-') else 1.0
+    axis = spec.lstrip('-+')
+    index = {'x': 0, 'y': 1, 'z': 2}[axis]
+    return index, sign
+
+
+def camera_to_body(cam_x, cam_y, cam_z, transform):
+    """Apply camera-to-body transform. transform is list of 3 (index, sign) tuples."""
+    cam = (cam_x, cam_y, cam_z)
+    return (
+        transform[0][1] * cam[transform[0][0]],
+        transform[1][1] * cam[transform[1][0]],
+        transform[2][1] * cam[transform[2][0]],
+    )
+
+
 # ---------------------------------------------------------------------------
 # ROS2 Node
 # ---------------------------------------------------------------------------
@@ -77,11 +96,20 @@ class TagDetectorAdapterNode(Node):
         self.declare_parameter('debounce_buffer_size', 30)
         self.declare_parameter('debounce_threshold', 0.8)
         self.declare_parameter('detection_topic', '/apriltag/detections')
+        self.declare_parameter('cam_body_x_from', '-y')
+        self.declare_parameter('cam_body_y_from', 'x')
+        self.declare_parameter('cam_body_z_from', 'z')
 
         self.primary_id = self.get_parameter('primary_tag_id').value
         self.secondary_id = self.get_parameter('secondary_tag_id').value
         self.primary_size = self.get_parameter('primary_tag_size').value
         self.secondary_size = self.get_parameter('secondary_tag_size').value
+
+        self.cam_body_transform = [
+            _parse_axis(self.get_parameter('cam_body_x_from').value),
+            _parse_axis(self.get_parameter('cam_body_y_from').value),
+            _parse_axis(self.get_parameter('cam_body_z_from').value),
+        ]
 
         self.fx = self.fy = self.cx = self.cy = None
         self.frames_since_last = 0
@@ -158,9 +186,14 @@ class TagDetectorAdapterNode(Node):
         target.angle_x, target.angle_y = compute_angles(
             u, v, self.cx, self.cy, self.fx, self.fy)
 
-        # Position from pose estimation (angles-only for now; position
-        # requires verifying the camera-to-body frame transform in sim)
-        target.position_valid = False
+        # 3D pose from apriltag_ros, transformed to body frame
+        pos = detection.pose.pose.pose.position
+        bx, by, bz = camera_to_body(
+            pos.x, pos.y, pos.z, self.cam_body_transform)
+        target.position_x = bx
+        target.position_y = by
+        target.position_z = bz
+        target.position_valid = True
 
         self.target_pub.publish(target)
 

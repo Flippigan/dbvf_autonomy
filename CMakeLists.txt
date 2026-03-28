@@ -21,6 +21,7 @@ install(PROGRAMS
   scripts/mavlink_interface_node
   scripts/tag_detector_adapter_node
   scripts/precision_landing_node
+  scripts/tag_visualizer_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -32,6 +33,8 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_angles test/test_angle_computation.py)
   ament_add_pytest_test(test_tags test/test_tag_selection.py)
   ament_add_pytest_test(test_fsm test/test_state_machine.py)
+  ament_add_pytest_test(test_pid test/test_pid_controller.py)
+  ament_add_pytest_test(test_pose test/test_pose_transform.py)
 endif()
 
 ament_package()

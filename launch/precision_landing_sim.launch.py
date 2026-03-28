@@ -55,4 +55,11 @@ def generate_launch_description():
             name='precision_landing',
             parameters=[config],
         ),
+
+        # Tag detection visualizer (view with: rqt_image_view /dbvf/debug/tag_image)
+        Node(
+            package='dbvf_autonomy',
+            executable='tag_visualizer_node',
+            name='tag_visualizer',
+        ),
     ])
