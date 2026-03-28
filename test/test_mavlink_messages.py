@@ -1,6 +1,8 @@
 from dbvf_autonomy.mavlink_interface_node import (
     ARDUPILOT_MODE_MAP,
+    RANGE_ALT_SENTINEL,
     build_landing_target_params,
+    extract_rangefinder_distance,
 )
 
 
@@ -40,3 +42,16 @@ def test_landing_target_with_position():
     assert params['y'] == 0.5
     assert params['z'] == 3.0
     assert params['size_x'] == 0.15
+
+
+def test_range_alt_sentinel_before_data():
+    """range_alt is -1.0 before first RANGEFINDER message received."""
+    assert RANGE_ALT_SENTINEL == -1.0
+
+
+def test_range_alt_populated_from_rangefinder():
+    """range_alt populated correctly from RANGEFINDER MAVLink message."""
+    class FakeRangefinderMsg:
+        distance = 5.43
+
+    assert extract_rangefinder_distance(FakeRangefinderMsg()) == 5.43
