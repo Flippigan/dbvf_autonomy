@@ -71,6 +71,45 @@ def _parse_axis(spec):
     return index, sign
 
 
+def estimate_tag_position(homography, fx, fy, cx, cy, tag_size):
+    """Estimate 3D position of tag center in camera frame from homography.
+
+    Decomposes K^-1 * H to extract translation, matching the apriltag C
+    library's estimate_pose_for_tag_homography algorithm.
+
+    Args:
+        homography: 9-element flat array (row-major 3x3) from AprilTagDetection.
+        fx, fy, cx, cy: Camera intrinsics from CameraInfo K matrix.
+        tag_size: Physical tag size in metres.
+
+    Returns:
+        (x, y, z) position of tag center in camera frame, in metres.
+    """
+    h = homography
+    # M = K^-1 * H  where K^-1 = [[1/fx, 0, -cx/fx], [0, 1/fy, -cy/fy], [0, 0, 1]]
+    m00 = h[0] / fx - h[6] * cx / fx
+    m10 = h[3] / fy - h[6] * cy / fy
+    m20 = h[6]
+
+    m01 = h[1] / fx - h[7] * cx / fx
+    m11 = h[4] / fy - h[7] * cy / fy
+    m21 = h[7]
+
+    m02 = h[2] / fx - h[8] * cx / fx
+    m12 = h[5] / fy - h[8] * cy / fy
+    m22 = h[8]
+
+    # Scale so rotation columns have unit norm
+    col0_norm = math.sqrt(m00**2 + m10**2 + m20**2)
+    col1_norm = math.sqrt(m01**2 + m11**2 + m21**2)
+    scale = 2.0 / (col0_norm + col1_norm)
+
+    half_size = tag_size / 2.0
+    return (scale * m02 * half_size,
+            scale * m12 * half_size,
+            scale * m22 * half_size)
+
+
 def camera_to_body(cam_x, cam_y, cam_z, transform):
     """Apply camera-to-body transform. transform is list of 3 (index, sign) tuples."""
     cam = (cam_x, cam_y, cam_z)
@@ -186,10 +225,12 @@ class TagDetectorAdapterNode(Node):
         target.angle_x, target.angle_y = compute_angles(
             u, v, self.cx, self.cy, self.fx, self.fy)
 
-        # 3D pose from apriltag_ros, transformed to body frame
-        pos = detection.pose.pose.pose.position
+        # Estimate 3D pose from homography + intrinsics
+        cam_x, cam_y, cam_z = estimate_tag_position(
+            detection.homography, self.fx, self.fy, self.cx, self.cy,
+            target.tag_size)
         bx, by, bz = camera_to_body(
-            pos.x, pos.y, pos.z, self.cam_body_transform)
+            cam_x, cam_y, cam_z, self.cam_body_transform)
         target.position_x = bx
         target.position_y = by
         target.position_z = bz

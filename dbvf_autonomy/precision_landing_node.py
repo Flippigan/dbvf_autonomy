@@ -15,6 +15,24 @@ from dbvf_msgs.srv import SetMode, SendGuidedPosition, SendGuidedVelocity, Start
 # PID controller (tested independently of ROS2)
 # ---------------------------------------------------------------------------
 
+RANGE_ALT_SENTINEL = -1.0
+
+
+def clamp_descent_rate(vz, range_alt, slow_descent_altitude, slow_descent_rate):
+    """Clamp downward velocity when rangefinder reads at or below threshold.
+
+    Only clamps positive vz (downward in NED). Returns vz unchanged when
+    above threshold, not descending, or no valid rangefinder reading.
+    """
+    if range_alt < 0.0:  # No valid rangefinder reading
+        return vz
+    if vz <= slow_descent_rate:  # Not descending fast enough to clamp
+        return vz
+    if range_alt <= slow_descent_altitude:
+        return slow_descent_rate
+    return vz
+
+
 class PIDController:
     def __init__(self, kp, ki, kd, output_limit):
         self.kp = kp
@@ -360,6 +378,10 @@ class PrecisionLandingNode(Node):
         self.declare_parameter('servo_pid_d', 0.1)
         self.declare_parameter('servo_max_speed', 0.5)
         self.declare_parameter('secondary_tag_id', 1)
+        self.declare_parameter('search_step_interval', 3.0)
+        self.declare_parameter('search_step_amount', 0.5)
+        self.declare_parameter('slow_descent_altitude', 2.0)
+        self.declare_parameter('slow_descent_rate', 0.1)
 
         config = {p: self.get_parameter(p).value for p in [
             'approach_altitude', 'min_search_altitude', 'search_descent_rate',
@@ -385,10 +407,17 @@ class PrecisionLandingNode(Node):
         self.pid_x = PIDController(kp, ki, kd, max_speed)
         self.pid_y = PIDController(kp, ki, kd, max_speed)
 
+        self._search_step_interval = self.get_parameter('search_step_interval').value
+        self._search_step_amount = self.get_parameter('search_step_amount').value
+        self._slow_descent_altitude = self.get_parameter('slow_descent_altitude').value
+        self._slow_descent_rate = self.get_parameter('slow_descent_rate').value
+        self._slow_descent_active = False
+
         self.latest_target = None
         self.latest_tag_status = None
         self.latest_vehicle_state = None
         self._search_target_alt = 0.0
+        self._search_last_stepdown = 0.0
         self._last_guided_time = 0.0
         self._last_control_time = 0.0
 
@@ -478,6 +507,7 @@ class PrecisionLandingNode(Node):
             if state == LandingState.SEARCH:
                 self._call_set_mode('GUIDED')
                 self._search_target_alt = vs.alt_rel
+                self._search_last_stepdown = now
                 self.pid_x.reset()
                 self.pid_y.reset()
             elif state == LandingState.DESCEND_COARSE:
@@ -501,11 +531,23 @@ class PrecisionLandingNode(Node):
                 self._last_guided_time = now
 
         elif state == LandingState.SEARCH:
-            if self.latest_tag_status and self.latest_tag_status.detected:
+            tag_seen = (self.latest_tag_status
+                        and self.latest_tag_status.detected)
+            if tag_seen:
                 self._search_target_alt -= self.search_descent_rate * 0.05
                 self._search_target_alt = max(
                     self._search_target_alt,
                     self.fsm.config['min_search_altitude'])
+            else:
+                if now - self._search_last_stepdown >= self._search_step_interval:
+                    self._search_target_alt -= self._search_step_amount
+                    self._search_target_alt = max(
+                        self._search_target_alt,
+                        self.fsm.config['min_search_altitude'])
+                    self.get_logger().info(
+                        f'SEARCH step-down (no tag): target_alt='
+                        f'{self._search_target_alt:.1f}m')
+                    self._search_last_stepdown = now
             if now - self._last_guided_time >= 0.5:
                 self._call_guided_position(
                     self.fsm.target_lat, self.fsm.target_lon,
@@ -595,6 +637,22 @@ class PrecisionLandingNode(Node):
         self.guided_cli.call_async(req)
 
     def _call_guided_velocity(self, vx, vy, vz):
+        # Global descent rate clamp near ground (ISS-011)
+        vs = self.latest_vehicle_state
+        if vs is not None:
+            clamped_vz = clamp_descent_rate(
+                vz, vs.range_alt,
+                self._slow_descent_altitude, self._slow_descent_rate)
+            if clamped_vz != vz:
+                if not self._slow_descent_active:
+                    self._slow_descent_active = True
+                    self.get_logger().info(
+                        f'Slow descent clamp active: range_alt={vs.range_alt:.1f}m, '
+                        f'vz {vz:.2f} -> {clamped_vz:.2f} m/s')
+                vz = clamped_vz
+            elif self._slow_descent_active:
+                self._slow_descent_active = False
+
         if not self.velocity_cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().error('send_guided_velocity service unavailable')
             return

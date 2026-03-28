@@ -35,6 +35,8 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_fsm test/test_state_machine.py)
   ament_add_pytest_test(test_pid test/test_pid_controller.py)
   ament_add_pytest_test(test_pose test/test_pose_transform.py)
+  ament_add_pytest_test(test_tag_pose_est test/test_tag_pose_estimation.py)
+  ament_add_pytest_test(test_descent_clamp test/test_descent_rate_clamp.py)
 endif()
 
 ament_package()

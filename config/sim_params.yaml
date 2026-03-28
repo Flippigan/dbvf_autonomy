@@ -48,6 +48,10 @@ precision_landing:
     small_tag_search_radius: 0.5
     small_tag_search_speed: 0.2
 
+    # Slow descent near ground (ISS-011)
+    slow_descent_altitude: 2.0   # Rangefinder threshold (meters AGL)
+    slow_descent_rate: 0.1       # Max descent rate below threshold (m/s)
+
     # Visual servo PID
     servo_pid_p: 0.5
     servo_pid_i: 0.0
