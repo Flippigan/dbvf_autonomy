@@ -5,7 +5,7 @@ from enum import Enum
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import Int32, String
 
 from dbvf_msgs.msg import LandingTargetPose, TagStatus, VehicleState
 from dbvf_msgs.srv import SetMode, SendGuidedPosition, SendGuidedVelocity, StartPrecisionLanding
@@ -73,6 +73,18 @@ class LandingState(Enum):
     SMALL_TAG_SEARCH = 'SMALL_TAG_SEARCH'
     LANDED = 'LANDED'
     ABORT_LAND = 'ABORT_LAND'
+
+
+def compute_preferred_tag_id(state, range_alt, slow_descent_altitude):
+    """Return the preferred tag ID (0=primary, 1=secondary) for adapter coordination."""
+    if state in (LandingState.DESCEND_HOLD, LandingState.DESCEND_OFFSET,
+                 LandingState.DESCEND_FINAL, LandingState.SMALL_TAG_SEARCH):
+        return 1
+    if (state == LandingState.DESCEND_COARSE
+            and range_alt >= 0.0
+            and range_alt <= slow_descent_altitude):
+        return 1
+    return 0
 
 
 class LandingStateMachine:
@@ -433,6 +445,8 @@ class PrecisionLandingNode(Node):
         # Publishers
         self.state_pub = self.create_publisher(
             String, '/dbvf/landing_state', 10)
+        self.preferred_tag_pub = self.create_publisher(
+            Int32, '/dbvf/cmd/preferred_tag_id', 10)
 
         # Service clients
         self.set_mode_cli = self.create_client(SetMode, '/dbvf/set_mode')
@@ -569,6 +583,12 @@ class PrecisionLandingNode(Node):
             self._call_guided_velocity(
                 0.0, 0.0, self.fsm.config['final_descent_rate'])
 
+        # Publish preferred tag ID for adapter coordination
+        preferred = Int32()
+        preferred.data = compute_preferred_tag_id(
+            state, vs.range_alt, self._slow_descent_altitude)
+        self.preferred_tag_pub.publish(preferred)
+
         # Publish current state
         msg = String()
         msg.data = state.value
@@ -583,6 +603,15 @@ class PrecisionLandingNode(Node):
         use_offset = info.get('use_offset', False)
 
         target = self.latest_target
+
+        # Safety check: reject primary tag data during secondary-tag states
+        expected_secondary = (state in (LandingState.DESCEND_HOLD,
+                                        LandingState.DESCEND_OFFSET,
+                                        LandingState.DESCEND_FINAL))
+        if (expected_secondary and target is not None
+                and target.tag_id != self.fsm.config.get('secondary_tag_id', 1)):
+            target = None
+
         tag_detected = (self.latest_tag_status
                         and self.latest_tag_status.detected
                         and target is not None

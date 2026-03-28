@@ -60,3 +60,31 @@ def test_none_does_not_affect_switching():
     f.update(None)  # buffer=[0,0,0,0,None]
     f.update(1)     # buffer=[0,0,0,None,1]
     assert f.active_id == 0  # 1 has 1/5=20%
+
+
+def test_preferred_id_immediate_switch():
+    """Buffer full of tag 0, preferred_id=1 → immediate switch to 1."""
+    f = DebounceFilter(buffer_size=5, threshold=0.8)
+    for _ in range(5):
+        f.update(0)
+    assert f.active_id == 0
+    result = f.update(1, preferred_id=1)
+    assert result == 1
+
+
+def test_preferred_id_none_no_bypass():
+    """Buffer full of tag 0, preferred_id=None → normal debounce, stays 0."""
+    f = DebounceFilter(buffer_size=5, threshold=0.8)
+    for _ in range(5):
+        f.update(0)
+    result = f.update(1, preferred_id=None)
+    assert result == 0
+
+
+def test_non_preferred_still_debounced():
+    """Buffer full of tag 0, preferred_id=0, candidate=1 → stays 0 (1 != preferred)."""
+    f = DebounceFilter(buffer_size=5, threshold=0.8)
+    for _ in range(5):
+        f.update(0)
+    result = f.update(1, preferred_id=0)
+    assert result == 0

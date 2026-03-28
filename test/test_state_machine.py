@@ -1,4 +1,4 @@
-from dbvf_autonomy.precision_landing_node import LandingStateMachine, LandingState
+from dbvf_autonomy.precision_landing_node import LandingStateMachine, LandingState, PIDController
 
 
 class MockVehicleState:
@@ -415,3 +415,68 @@ def test_global_timeout_from_descend_offset():
     state, info = sm.update(vs, small_tag, 62.0)  # timeout
     assert state == LandingState.ABORT_LAND
     assert info['action'] == 'timeout'
+
+
+# ---------------------------------------------------------------------------
+# Velocity servo tag ID guard tests (ISS-012)
+# ---------------------------------------------------------------------------
+
+class MockTarget:
+    def __init__(self, tag_id=0, position_x=0.1, position_y=0.1, position_valid=True):
+        self.tag_id = tag_id
+        self.position_x = position_x
+        self.position_y = position_y
+        self.position_valid = position_valid
+
+
+def _apply_tag_guard(state, target, secondary_tag_id=1):
+    """Replicates the tag ID guard logic from _velocity_servo."""
+    expected_secondary = (state in (LandingState.DESCEND_HOLD,
+                                    LandingState.DESCEND_OFFSET,
+                                    LandingState.DESCEND_FINAL))
+    if (expected_secondary and target is not None
+            and target.tag_id != secondary_tag_id):
+        target = None
+    return target
+
+
+def test_velocity_servo_rejects_wrong_tag_in_hold():
+    """DESCEND_HOLD with target.tag_id=0 -> target treated as None (hold position)."""
+    target = MockTarget(tag_id=0)
+    result = _apply_tag_guard(LandingState.DESCEND_HOLD, target)
+    assert result is None
+
+
+def test_velocity_servo_accepts_correct_tag_in_hold():
+    """DESCEND_HOLD with target.tag_id=1 -> normal PID output."""
+    target = MockTarget(tag_id=1)
+    result = _apply_tag_guard(LandingState.DESCEND_HOLD, target)
+    assert result is target
+
+
+# ---------------------------------------------------------------------------
+# Preferred tag publish tests (ISS-012 circular dependency fix)
+# ---------------------------------------------------------------------------
+
+def _compute_preferred_tag(state, range_alt, slow_descent_altitude):
+    """Replicates the preferred tag publish logic from _control_loop."""
+    from dbvf_autonomy.precision_landing_node import compute_preferred_tag_id
+    return compute_preferred_tag_id(state, range_alt, slow_descent_altitude)
+
+
+def test_preferred_tag_secondary_during_late_descend_coarse():
+    """DESCEND_COARSE with range_alt=1.8 (below 2.0m threshold) → preferred=1."""
+    result = _compute_preferred_tag(LandingState.DESCEND_COARSE, 1.8, 2.0)
+    assert result == 1
+
+
+def test_preferred_tag_primary_during_early_descend_coarse():
+    """DESCEND_COARSE with range_alt=3.0 (above 2.0m threshold) → preferred=0."""
+    result = _compute_preferred_tag(LandingState.DESCEND_COARSE, 3.0, 2.0)
+    assert result == 0
+
+
+def test_preferred_tag_primary_when_range_alt_invalid():
+    """DESCEND_COARSE with range_alt=-1.0 (invalid) → preferred=0."""
+    result = _compute_preferred_tag(LandingState.DESCEND_COARSE, -1.0, 2.0)
+    assert result == 0

@@ -4,6 +4,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo
+from std_msgs.msg import Int32
 from apriltag_msgs.msg import AprilTagDetectionArray
 
 from dbvf_msgs.msg import LandingTargetPose, TagStatus
@@ -22,7 +23,7 @@ class DebounceFilter:
         self.buffer: list = []
         self.active_id = None
 
-    def update(self, candidate_id):
+    def update(self, candidate_id, preferred_id=None):
         """Push candidate (int or None) and return the current active tag ID."""
         self.buffer.append(candidate_id)
         if len(self.buffer) > self.buffer_size:
@@ -36,6 +37,11 @@ class DebounceFilter:
             return self.active_id
 
         if candidate_id == self.active_id:
+            return self.active_id
+
+        # Immediate switch when candidate matches preferred tag
+        if preferred_id is not None and candidate_id == preferred_id:
+            self.active_id = candidate_id
             return self.active_id
 
         # Different tag — switch only if it dominates the buffer
@@ -53,8 +59,10 @@ def compute_angles(u, v, cx, cy, fx, fy):
     return angle_x, angle_y
 
 
-def select_best_tag(detections_by_id, primary_id, secondary_id):
+def select_best_tag(detections_by_id, primary_id, secondary_id, preferred_id=None):
     """Return (tag_id, detection) for the best detected tag, or (None, None)."""
+    if preferred_id is not None and preferred_id in detections_by_id:
+        return preferred_id, detections_by_id[preferred_id]
     if primary_id in detections_by_id:
         return primary_id, detections_by_id[primary_id]
     if secondary_id in detections_by_id:
@@ -152,6 +160,7 @@ class TagDetectorAdapterNode(Node):
 
         self.fx = self.fy = self.cx = self.cy = None
         self.frames_since_last = 0
+        self.preferred_tag_id = None
 
         self.debounce = DebounceFilter(
             buffer_size=self.get_parameter('debounce_buffer_size').value,
@@ -162,6 +171,8 @@ class TagDetectorAdapterNode(Node):
             AprilTagDetectionArray, det_topic, self._detection_cb, 10)
         self.create_subscription(
             CameraInfo, '/camera/camera_info', self._camera_info_cb, 10)
+        self.create_subscription(
+            Int32, '/dbvf/cmd/preferred_tag_id', self._preferred_tag_cb, 10)
 
         self.target_pub = self.create_publisher(
             LandingTargetPose, '/dbvf/landing_target_pose', 10)
@@ -169,6 +180,9 @@ class TagDetectorAdapterNode(Node):
             TagStatus, '/dbvf/tag_status', 10)
 
         self.get_logger().info('Tag detector adapter started')
+
+    def _preferred_tag_cb(self, msg):
+        self.preferred_tag_id = msg.data
 
     def _camera_info_cb(self, msg):
         if self.fx is None:
@@ -184,8 +198,9 @@ class TagDetectorAdapterNode(Node):
         detections_by_id = {det.id: det for det in msg.detections}
 
         candidate_id, candidate_det = select_best_tag(
-            detections_by_id, self.primary_id, self.secondary_id)
-        active_id = self.debounce.update(candidate_id)
+            detections_by_id, self.primary_id, self.secondary_id,
+            self.preferred_tag_id)
+        active_id = self.debounce.update(candidate_id, preferred_id=self.preferred_tag_id)
 
         status = TagStatus()
         status.header = msg.header
