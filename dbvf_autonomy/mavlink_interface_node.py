@@ -8,7 +8,7 @@ from std_msgs.msg import Bool
 from pymavlink import mavutil
 
 from dbvf_msgs.msg import LandingTargetPose, VehicleState
-from dbvf_msgs.srv import SetMode, ArmMotors, SendGuidedPosition
+from dbvf_msgs.srv import SetMode, ArmMotors, SendGuidedPosition, SendGuidedVelocity
 
 
 # ArduCopter custom mode numbers
@@ -23,6 +23,19 @@ ARDUPILOT_MODE_MAP = {
 
 # Reverse lookup: mode number -> name
 _MODE_NUM_TO_NAME = {v: k for k, v in ARDUPILOT_MODE_MAP.items()}
+
+RANGE_ALT_SENTINEL = -1.0
+
+
+def extract_rangefinder_distance(msg):
+    """Extract distance in meters from a RANGEFINDER MAVLink message."""
+    return msg.distance
+
+
+# type_mask for velocity-only SET_POSITION_TARGET_LOCAL_NED
+# Bits: pos_x|pos_y|pos_z=ignored(0b111), vel_x|vel_y|vel_z=used(0b000),
+#        accel=ignored(0b111), yaw=ignored(0b1), yaw_rate=ignored(0b1)
+VELOCITY_TYPE_MASK = 0b0000_11_0_111_000_111
 
 
 def build_landing_target_params(angle_x, angle_y, position_x, position_y,
@@ -45,7 +58,7 @@ class MavlinkInterfaceNode(Node):
     def __init__(self):
         super().__init__('mavlink_interface')
 
-        self.declare_parameter('connection_string', 'tcp:127.0.0.1:5760')
+        self.declare_parameter('connection_string', 'udpin:0.0.0.0:14551')
         self.declare_parameter('source_system', 255)
         self.declare_parameter('source_component', 0)
         self.declare_parameter('heartbeat_rate', 1.0)
@@ -64,6 +77,7 @@ class MavlinkInterfaceNode(Node):
         self.vehicle_vy = 0.0
         self.vehicle_vz = 0.0
         self.vehicle_heading = 0.0
+        self.range_alt = RANGE_ALT_SENTINEL
         self.last_heartbeat_time = 0.0
 
         # Publishers
@@ -80,6 +94,9 @@ class MavlinkInterfaceNode(Node):
         self.create_service(ArmMotors, '/dbvf/arm_motors', self._arm_cb)
         self.create_service(
             SendGuidedPosition, '/dbvf/send_guided_position', self._guided_cb)
+        self.create_service(
+            SendGuidedVelocity, '/dbvf/send_guided_velocity',
+            self._guided_velocity_cb)
 
         # Connect to ArduPilot
         self._connect()
@@ -100,6 +117,9 @@ class MavlinkInterfaceNode(Node):
             self.conn = mavutil.mavlink_connection(
                 conn_str, source_system=src_sys, source_component=src_comp)
             self.conn.wait_heartbeat(timeout=30)
+            # MAVProxy relay may report compid=0; force compid=1
+            # (MAV_COMP_ID_AUTOPILOT1) since ArduPilot is always component 1.
+            self.conn.target_component = 1
             self.get_logger().info(
                 f'Connected: sysid={self.conn.target_system} '
                 f'compid={self.conn.target_component}')
@@ -154,6 +174,8 @@ class MavlinkInterfaceNode(Node):
                     self.vehicle_vy = msg.vy / 100.0
                     self.vehicle_vz = msg.vz / 100.0
                     self.vehicle_heading = msg.hdg / 100.0
+                elif mtype == 'RANGEFINDER':
+                    self.range_alt = extract_rangefinder_distance(msg)
 
         state = VehicleState()
         state.header.stamp = self.get_clock().now().to_msg()
@@ -166,6 +188,7 @@ class MavlinkInterfaceNode(Node):
         state.vy = self.vehicle_vy
         state.vz = self.vehicle_vz
         state.heading = self.vehicle_heading
+        state.range_alt = self.range_alt
         self.state_pub.publish(state)
 
     # -- Subscriber callbacks -------------------------------------------------
@@ -258,6 +281,26 @@ class MavlinkInterfaceNode(Node):
         response.success = True
         response.message = (
             f'Sent: {request.lat:.7f}, {request.lon:.7f}, {request.alt:.1f}m')
+        return response
+
+    def _guided_velocity_cb(self, request, response):
+        if not self.conn:
+            response.success = False
+            response.message = 'Not connected'
+            return response
+        with self.lock:
+            self.conn.mav.set_position_target_local_ned_send(
+                0,  # time_boot_ms
+                self.conn.target_system, self.conn.target_component,
+                mavutil.mavlink.MAV_FRAME_BODY_NED,
+                VELOCITY_TYPE_MASK,
+                0, 0, 0,                                    # position (ignored)
+                float(request.vx), float(request.vy), float(request.vz),
+                0, 0, 0,                                    # acceleration (ignored)
+                0, 0)                                        # yaw, yaw_rate (ignored)
+        response.success = True
+        response.message = (
+            f'Vel: vx={request.vx:.2f} vy={request.vy:.2f} vz={request.vz:.2f}')
         return response
 
 
