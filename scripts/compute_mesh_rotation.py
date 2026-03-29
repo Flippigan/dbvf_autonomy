@@ -190,3 +190,110 @@ def find_optimal_translation(
     print(f"  Fine best:   tx={best_tx:.1f}, ty={best_ty:.1f}, score={best_score:.1f}")
 
     return best_tx, best_ty, best_zone_z
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Compute mesh rotation for VFS DBVF course alignment",
+    )
+    parser.add_argument(
+        "--mesh", default=DEFAULT_MESH_PATH, help="Path to DAE mesh file",
+    )
+    parser.add_argument(
+        "--yaw",
+        type=float,
+        default=DEFAULT_YAW_DEG,
+        help="Yaw rotation in degrees (default: -57)",
+    )
+    args = parser.parse_args()
+
+    yaw_rad = math.radians(args.yaw)
+
+    # --- Load and rotate ---
+    print(f"Loading mesh: {args.mesh}")
+    mesh = load_mesh(args.mesh)
+    print(f"  Vertices: {len(mesh.vertices):,}")
+    print(f"  Faces:    {len(mesh.faces):,}")
+    print(
+        f"  Bounds:   "
+        f"X=[{mesh.bounds[0][0]:.1f}, {mesh.bounds[1][0]:.1f}]  "
+        f"Y=[{mesh.bounds[0][1]:.1f}, {mesh.bounds[1][1]:.1f}]  "
+        f"Z=[{mesh.bounds[0][2]:.1f}, {mesh.bounds[1][2]:.1f}]"
+    )
+
+    print(f"\nApplying yaw rotation: {args.yaw} deg ({yaw_rad:.6f} rad)")
+    apply_yaw_rotation(mesh, args.yaw)
+    print(
+        f"  Rotated:  "
+        f"X=[{mesh.bounds[0][0]:.1f}, {mesh.bounds[1][0]:.1f}]  "
+        f"Y=[{mesh.bounds[0][1]:.1f}, {mesh.bounds[1][1]:.1f}]  "
+        f"Z=[{mesh.bounds[0][2]:.1f}, {mesh.bounds[1][2]:.1f}]"
+    )
+
+    # --- Find optimal translation ---
+    print("\nFinding optimal translation...")
+    tx, ty, zone_z = find_optimal_translation(mesh, ZONES)
+
+    # Compute tz: place H mesh surface at world Z = 0 (ground level)
+    h_z_rotated = zone_z["H"]
+    tz = -h_z_rotated
+
+    # --- Zone elevation table ---
+    print("\n" + "=" * 66)
+    print("ZONE ELEVATION TABLE (World Coordinates)")
+    print("=" * 66)
+    print(f"{'Zone':<6} {'World (X, Y)':<18} {'Surface Z':>12} {'Status':>16}")
+    print("-" * 66)
+    for name, (zx, zy) in ZONES.items():
+        z_rotated = zone_z.get(name)
+        if z_rotated is not None:
+            world_z = z_rotated + tz
+            print(
+                f"{name:<6} ({zx:>6.1f}, {zy:>4.1f})       "
+                f"{world_z:>10.3f}m       {'COVERED':>8}"
+            )
+        else:
+            print(
+                f"{name:<6} ({zx:>6.1f}, {zy:>4.1f})              "
+                f"N/A       {'OFF MESH':>8}"
+            )
+
+    # --- SDF model pose ---
+    print("\n" + "=" * 66)
+    print("SDF MODEL POSE (for custom_terrain_model in iris_runway.sdf)")
+    print("=" * 66)
+    print(f"\n  <pose>{tx:.4f} {ty:.4f} {tz:.4f} 0 0 {yaw_rad:.6f}</pose>\n")
+
+    # --- AprilTag poses ---
+    print("=" * 66)
+    print("APRILTAG POSES")
+    print("=" * 66)
+    for tag_name, (ax, ay) in APRILTAG_POSITIONS.items():
+        mx, my = ax - tx, ay - ty
+        tag_z_rotated = ray_cast_z(mesh, mx, my)
+        if tag_z_rotated is not None:
+            tag_z_world = tag_z_rotated + tz + APRILTAG_Z_OFFSET
+            print(f"\n  {tag_name}:")
+            print(f"    <pose>{ax} {ay} {tag_z_world:.3f} 0 0 0</pose>")
+        else:
+            print(f"\n  {tag_name}: NO MESH SURFACE at ({ax}, {ay})")
+
+    # --- Summary ---
+    print("\n" + "=" * 66)
+    print("SUMMARY")
+    print("=" * 66)
+    print(f"  Yaw rotation:  {args.yaw} deg ({yaw_rad:.6f} rad)")
+    print(f"  Translation:   tx={tx:.4f}  ty={ty:.4f}  tz={tz:.4f}")
+    print(f"  H surface Z:   {0.0:.3f}m (world)")
+    wa_z = zone_z.get("WA")
+    if wa_z is not None:
+        print(f"  WA surface Z:  {wa_z + tz:.3f}m (world)")
+    f2_z = zone_z.get("F2")
+    if f2_z is not None:
+        print(f"  F2 surface Z:  {f2_z + tz:.3f}m (world)")
+    print(f"  Zones covered: {sum(1 for v in zone_z.values() if v is not None)}/5")
+    print()
+
+
+if __name__ == "__main__":
+    main()
