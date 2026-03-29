@@ -155,14 +155,27 @@ class MissionSequencerNode(Node):
         if vs is None:
             return
 
-        # Inject heartbeat status into vehicle state for FSM
+        # Build a lightweight state object for the FSM — ROS2 messages
+        # don't allow setting arbitrary attributes, so we wrap the fields.
         hb_timeout = self.mission_config['heartbeat_loss_timeout_s']
-        vs.heartbeat_ok = (time.time() - self._last_heartbeat_time) < hb_timeout
+
+        class _VState:
+            pass
+
+        fs = _VState()
+        fs.lat = vs.lat
+        fs.lon = vs.lon
+        fs.alt_rel = vs.alt_rel
+        fs.armed = vs.armed
+        fs.mode = vs.mode
+        fs.vz = vs.vz
+        fs.range_alt = vs.range_alt
+        fs.heartbeat_ok = (time.time() - self._last_heartbeat_time) < hb_timeout
 
         now = time.time()
         prev_state = self.fsm.state
 
-        state, info = self.fsm.update(vs, now)
+        state, info = self.fsm.update(fs, now)
 
         # Log state transitions
         if state != prev_state:
