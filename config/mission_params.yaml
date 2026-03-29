@@ -1,0 +1,36 @@
+mission_sequencer:
+  ros__parameters:
+    # Waypoint GPS coordinates (simulation defaults)
+    home_lat: -35.3632621
+    home_lon: 149.1652374
+    landing_lat: -35.3640000
+    landing_lon: 149.1652374
+    wa_lat: -35.3632531
+    wa_lon: 149.1657896
+    f1_lat: -35.3650000
+    f1_lon: 149.1652374
+    f2_lat: -35.3660000
+    f2_lon: 149.1652374
+
+    # Flight parameters
+    transit_altitude_ft: 35.0
+    position_tolerance_m: 3.0
+    takeoff_complete_alt_ft: 33.0
+
+    # Payload servo configuration
+    drop_servo_number: 9
+    drop_servo_pwm_release: 1100
+    drop_servo_pwm_hold: 1500
+    drop_settle_time_s: 2.0
+
+    # Drop zone target ("F1" or "F2")
+    drop_target: "F1"
+
+    # Safety
+    mission_timeout_s: 540.0
+    heartbeat_loss_timeout_s: 5.0
+    service_call_timeout_s: 5.0
+    guided_resend_interval_s: 1.0
+
+    # Altitude source
+    prefer_rangefinder: true
