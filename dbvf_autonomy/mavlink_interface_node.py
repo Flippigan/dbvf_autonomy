@@ -8,7 +8,7 @@ from std_msgs.msg import Bool
 from pymavlink import mavutil
 
 from dbvf_msgs.msg import LandingTargetPose, VehicleState
-from dbvf_msgs.srv import SetMode, ArmMotors, SendGuidedPosition, SendGuidedVelocity
+from dbvf_msgs.srv import SetMode, ArmMotors, SendGuidedPosition, SendGuidedVelocity, DoSetServo
 
 
 # ArduCopter custom mode numbers
@@ -97,6 +97,8 @@ class MavlinkInterfaceNode(Node):
         self.create_service(
             SendGuidedVelocity, '/dbvf/send_guided_velocity',
             self._guided_velocity_cb)
+        self.create_service(
+            DoSetServo, '/dbvf/do_set_servo', self._do_set_servo_cb)
 
         # Connect to ArduPilot
         self._connect()
@@ -301,6 +303,24 @@ class MavlinkInterfaceNode(Node):
         response.success = True
         response.message = (
             f'Vel: vx={request.vx:.2f} vy={request.vy:.2f} vz={request.vz:.2f}')
+        return response
+
+
+    def _do_set_servo_cb(self, request, response):
+        if not self.conn:
+            response.success = False
+            response.message = 'Not connected'
+            return response
+        with self.lock:
+            self.conn.mav.command_long_send(
+                self.conn.target_system, self.conn.target_component,
+                mavutil.mavlink.MAV_CMD_DO_SET_SERVO,
+                0,                          # confirmation
+                request.servo_number,       # param1: servo number
+                request.pwm,                # param2: PWM value
+                0, 0, 0, 0, 0)             # params 3-7 unused
+        response.success = True
+        response.message = f"Servo {request.servo_number} set to {request.pwm}"
         return response
 
 
