@@ -216,3 +216,323 @@ def test_wait_flagger_resumes():
     state, info = sm.update(vs, 4.0)
     assert state == MissionState.TAKEOFF_L
     assert info['action'] == 'flagger_resume'
+
+
+# ---------------------------------------------------------------------------
+# FM-2: TAKEOFF_L -> TRANSIT_TO_DROP -> DROP_PAYLOAD
+# ---------------------------------------------------------------------------
+
+def _to_takeoff_l(sm):
+    _to_wait_flagger(sm)
+    sm.resume()
+    vs = MockVehicleState(lat=L_LAT, lon=L_LON, alt_rel=0.0, armed=False)
+    sm.update(vs, 4.0)
+    assert sm.state == MissionState.TAKEOFF_L
+    return vs
+
+
+def test_takeoff_l_waits_for_altitude():
+    sm = MissionStateMachine(_make_config())
+    _to_takeoff_l(sm)
+    vs = MockVehicleState(lat=L_LAT, lon=L_LON, alt_rel=5.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 5.0)
+    assert state == MissionState.TAKEOFF_L
+    assert info['action'] == 'climbing'
+
+
+def test_takeoff_l_complete():
+    sm = MissionStateMachine(_make_config())
+    _to_takeoff_l(sm)
+    alt = ft_to_m(33.0) + 0.1
+    vs = MockVehicleState(lat=L_LAT, lon=L_LON, alt_rel=alt, range_alt=alt,
+                          armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 5.0)
+    assert state == MissionState.TRANSIT_TO_DROP
+
+
+def _to_transit_to_drop(sm):
+    _to_takeoff_l(sm)
+    alt = ft_to_m(33.0) + 0.1
+    vs = MockVehicleState(lat=L_LAT, lon=L_LON, alt_rel=alt, range_alt=alt,
+                          armed=True, mode='GUIDED')
+    sm.update(vs, 5.0)
+    assert sm.state == MissionState.TRANSIT_TO_DROP
+
+
+def test_transit_to_drop_not_arrived():
+    sm = MissionStateMachine(_make_config())
+    _to_transit_to_drop(sm)
+    vs = MockVehicleState(lat=L_LAT, lon=L_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 6.0)
+    assert state == MissionState.TRANSIT_TO_DROP
+    assert info['action'] == 'transiting'
+
+
+def test_transit_to_drop_arrived():
+    sm = MissionStateMachine(_make_config())
+    _to_transit_to_drop(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 6.0)
+    assert state == MissionState.DROP_PAYLOAD
+    assert info['action'] == 'arrived_drop'
+    assert 'servo_release' in info['entry_actions']
+
+
+def _to_drop_payload(sm):
+    _to_transit_to_drop(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    sm.update(vs, 6.0)
+    assert sm.state == MissionState.DROP_PAYLOAD
+
+
+def test_drop_payload_waits_settle():
+    sm = MissionStateMachine(_make_config())
+    _to_drop_payload(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 7.0)  # 1.0s < 2.0s settle
+    assert state == MissionState.DROP_PAYLOAD
+    assert info['action'] == 'dropping'
+
+
+def test_drop_payload_complete():
+    sm = MissionStateMachine(_make_config())
+    _to_drop_payload(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 8.1)  # 2.1s > 2.0s settle
+    assert state == MissionState.TRANSIT_TO_WA
+    assert info['action'] == 'drop_complete'
+
+
+# ---------------------------------------------------------------------------
+# FM-3: TRANSIT_TO_WA -> LAND_WA -> TAKEOFF_WA -> TRANSIT_TO_DROP_2 -> DROP_PAYLOAD_2
+# ---------------------------------------------------------------------------
+
+def _to_transit_to_wa(sm):
+    _to_drop_payload(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    sm.update(vs, 8.1)  # drop_settle_time elapsed
+    assert sm.state == MissionState.TRANSIT_TO_WA
+
+
+def test_transit_to_wa_not_arrived():
+    sm = MissionStateMachine(_make_config())
+    _to_transit_to_wa(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 9.0)
+    assert state == MissionState.TRANSIT_TO_WA
+
+
+def test_transit_to_wa_arrived():
+    sm = MissionStateMachine(_make_config())
+    _to_transit_to_wa(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 9.0)
+    assert state == MissionState.LAND_WA
+    assert 'start_precision_landing' in info['entry_actions']
+
+
+def _to_land_wa(sm):
+    _to_transit_to_wa(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    sm.update(vs, 9.0)
+    assert sm.state == MissionState.LAND_WA
+
+
+def test_land_wa_waiting():
+    sm = MissionStateMachine(_make_config())
+    _to_land_wa(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=5.0, armed=True, mode='LAND')
+    state, info = sm.update(vs, 10.0)
+    assert state == MissionState.LAND_WA
+    assert info['action'] == 'precision_landing'
+
+
+def test_land_wa_success():
+    sm = MissionStateMachine(_make_config())
+    _to_land_wa(sm)
+    sm.set_landing_state('LANDED')
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
+    state, info = sm.update(vs, 10.0)
+    assert state == MissionState.TAKEOFF_WA
+    assert info['action'] == 'landed_wa'
+
+
+def test_land_wa_abort():
+    sm = MissionStateMachine(_make_config())
+    _to_land_wa(sm)
+    sm.set_landing_state('ABORT_LAND')
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=1.0, armed=True)
+    state, info = sm.update(vs, 10.0)
+    assert state == MissionState.ABORT
+    assert 'Precision landing failed' in info['reason']
+
+
+def _to_takeoff_wa(sm):
+    _to_land_wa(sm)
+    sm.set_landing_state('LANDED')
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
+    sm.update(vs, 10.0)
+    assert sm.state == MissionState.TAKEOFF_WA
+
+
+def test_takeoff_wa_complete():
+    sm = MissionStateMachine(_make_config())
+    _to_takeoff_wa(sm)
+    alt = ft_to_m(33.0) + 0.1
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=alt, range_alt=alt,
+                          armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 11.0)
+    assert state == MissionState.TRANSIT_TO_DROP_2
+
+
+def _to_transit_to_drop_2(sm):
+    _to_takeoff_wa(sm)
+    alt = ft_to_m(33.0) + 0.1
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=alt, range_alt=alt,
+                          armed=True, mode='GUIDED')
+    sm.update(vs, 11.0)
+    assert sm.state == MissionState.TRANSIT_TO_DROP_2
+
+
+def test_transit_to_drop_2_arrived():
+    sm = MissionStateMachine(_make_config())
+    _to_transit_to_drop_2(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 12.0)
+    assert state == MissionState.DROP_PAYLOAD_2
+    assert 'servo_release' in info['entry_actions']
+
+
+def _to_drop_payload_2(sm):
+    _to_transit_to_drop_2(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    sm.update(vs, 12.0)
+    assert sm.state == MissionState.DROP_PAYLOAD_2
+
+
+def test_drop_payload_2_complete():
+    sm = MissionStateMachine(_make_config())
+    _to_drop_payload_2(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 14.1)  # 2.1s > 2.0s settle
+    assert state == MissionState.TRANSIT_TO_H
+    assert info['action'] == 'drop_complete'
+
+
+# ---------------------------------------------------------------------------
+# Return Home: TRANSIT_TO_H -> LAND_H -> COMPLETE
+# ---------------------------------------------------------------------------
+
+def _to_transit_to_h(sm):
+    _to_drop_payload_2(sm)
+    vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    sm.update(vs, 14.1)
+    assert sm.state == MissionState.TRANSIT_TO_H
+
+
+def test_transit_to_h_arrived():
+    sm = MissionStateMachine(_make_config())
+    _to_transit_to_h(sm)
+    vs = MockVehicleState(lat=H_LAT, lon=H_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    state, info = sm.update(vs, 15.0)
+    assert state == MissionState.LAND_H
+    assert 'set_mode_land' in info['entry_actions']
+
+
+def _to_land_h(sm):
+    _to_transit_to_h(sm)
+    vs = MockVehicleState(lat=H_LAT, lon=H_LON, alt_rel=11.0, armed=True, mode='GUIDED')
+    sm.update(vs, 15.0)
+    assert sm.state == MissionState.LAND_H
+
+
+def test_land_h_complete():
+    sm = MissionStateMachine(_make_config())
+    _to_land_h(sm)
+    vs = MockVehicleState(lat=H_LAT, lon=H_LON, alt_rel=0.1, armed=False, vz=0.0)
+    state, info = sm.update(vs, 16.0)
+    assert state == MissionState.COMPLETE
+    assert info['action'] == 'landed_h'
+
+
+# ---------------------------------------------------------------------------
+# ABORT: reachable from any state
+# ---------------------------------------------------------------------------
+
+def test_abort_manual():
+    sm = MissionStateMachine(_make_config())
+    _to_transit_h_to_l(sm)
+    sm.abort('Manual abort')
+    vs = MockVehicleState()
+    state, info = sm.update(vs, 5.0)
+    assert state == MissionState.ABORT
+    assert info['reason'] == 'Manual abort'
+
+
+def test_abort_timeout():
+    sm = MissionStateMachine(_make_config(mission_timeout_s=10.0))
+    _to_takeoff_h(sm)
+    vs = MockVehicleState(alt_rel=5.0, armed=True, mode='GUIDED')
+    sm.update(vs, 0.0)  # set start_time
+    state, info = sm.update(vs, 11.0)  # 11s > 10s timeout
+    assert state == MissionState.ABORT
+    assert 'timeout' in info['reason'].lower()
+
+
+def test_abort_heartbeat_loss():
+    sm = MissionStateMachine(_make_config())
+    _to_transit_h_to_l(sm)
+    vs = MockVehicleState(lat=H_LAT, lon=H_LON, alt_rel=11.0, armed=True,
+                          mode='GUIDED', heartbeat_ok=False)
+    state, info = sm.update(vs, 5.0)
+    assert state == MissionState.ABORT
+    assert 'heartbeat' in info['reason'].lower()
+
+
+def test_wait_flagger_ignores_timeout():
+    """WAIT_FLAGGER should NOT abort on mission timeout."""
+    sm = MissionStateMachine(_make_config(mission_timeout_s=10.0))
+    _to_wait_flagger(sm)
+    vs = MockVehicleState(lat=L_LAT, lon=L_LON, alt_rel=0.0, armed=False)
+    state, info = sm.update(vs, 1000.0)  # Way past timeout
+    assert state == MissionState.WAIT_FLAGGER
+
+
+# ---------------------------------------------------------------------------
+# Drop target selection
+# ---------------------------------------------------------------------------
+
+def test_drop_target_f2():
+    sm = MissionStateMachine(_make_config(drop_target='F2'))
+    lat, lon = sm._get_drop_coords()
+    assert lat == -35.3660000
+    assert lon == 149.1652374
+
+
+# ---------------------------------------------------------------------------
+# Mission phase mapping
+# ---------------------------------------------------------------------------
+
+def test_phase_fm1():
+    from dbvf_autonomy.mission_state_machine import get_mission_phase
+    assert get_mission_phase(MissionState.TAKEOFF_H) == 'FM1'
+    assert get_mission_phase(MissionState.TRANSIT_H_TO_L) == 'FM1'
+    assert get_mission_phase(MissionState.LAND_L) == 'FM1'
+
+
+def test_phase_fm2():
+    from dbvf_autonomy.mission_state_machine import get_mission_phase
+    assert get_mission_phase(MissionState.TAKEOFF_L) == 'FM2'
+    assert get_mission_phase(MissionState.DROP_PAYLOAD) == 'FM2'
+
+
+def test_phase_fm3():
+    from dbvf_autonomy.mission_state_machine import get_mission_phase
+    assert get_mission_phase(MissionState.LAND_WA) == 'FM3'
+    assert get_mission_phase(MissionState.DROP_PAYLOAD_2) == 'FM3'
+
+
+def test_phase_rth():
+    from dbvf_autonomy.mission_state_machine import get_mission_phase
+    assert get_mission_phase(MissionState.TRANSIT_TO_H) == 'RTH'
+    assert get_mission_phase(MissionState.LAND_H) == 'RTH'
