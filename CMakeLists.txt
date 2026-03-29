@@ -22,6 +22,7 @@ install(PROGRAMS
   scripts/tag_detector_adapter_node
   scripts/precision_landing_node
   scripts/tag_visualizer_node
+  scripts/mission_sequencer_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
