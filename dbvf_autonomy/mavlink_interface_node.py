@@ -8,7 +8,7 @@ from std_msgs.msg import Bool
 from pymavlink import mavutil
 
 from dbvf_msgs.msg import LandingTargetPose, VehicleState
-from dbvf_msgs.srv import SetMode, ArmMotors, SendGuidedPosition, SendGuidedVelocity, DoSetServo
+from dbvf_msgs.srv import SetMode, ArmMotors, SendGuidedPosition, SendGuidedVelocity, DoSetServo, Takeoff
 
 
 # ArduCopter custom mode numbers
@@ -99,6 +99,8 @@ class MavlinkInterfaceNode(Node):
             self._guided_velocity_cb)
         self.create_service(
             DoSetServo, '/dbvf/do_set_servo', self._do_set_servo_cb)
+        self.create_service(
+            Takeoff, '/dbvf/takeoff', self._takeoff_cb)
 
         # Connect to ArduPilot
         self._connect()
@@ -321,6 +323,29 @@ class MavlinkInterfaceNode(Node):
                 0, 0, 0, 0, 0)             # params 3-7 unused
         response.success = True
         response.message = f"Servo {request.servo_number} set to {request.pwm}"
+        return response
+
+    def _takeoff_cb(self, request, response):
+        if not self.conn:
+            response.success = False
+            response.message = 'Not connected'
+            return response
+        with self.lock:
+            self.conn.mav.command_long_send(
+                self.conn.target_system, self.conn.target_component,
+                mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
+                0,                          # confirmation
+                0,                          # param1: pitch (unused for copter)
+                0, 0, 0, 0, 0,             # params 2-6 unused
+                float(request.altitude))    # param7: altitude in meters
+            ack = self.conn.recv_match(
+                type='COMMAND_ACK', blocking=True, timeout=2.0)
+        if ack and ack.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
+            response.success = True
+            response.message = f'Takeoff to {request.altitude:.1f}m'
+        else:
+            response.success = False
+            response.message = f'Takeoff command failed'
         return response
 
 

@@ -161,7 +161,7 @@ class MissionStateMachine:
                                 'entry_actions': []}
         self.state = MissionState.TAKEOFF_H
         return self.state, {'action': 'preflight_pass',
-                            'entry_actions': ['send_guided_position_h']}
+                            'entry_actions': ['takeoff']}
 
     def _takeoff_h(self, vs, t):
         alt = self._get_altitude(vs)
@@ -197,7 +197,7 @@ class MissionStateMachine:
             self.state = MissionState.TAKEOFF_L
             return self.state, {'action': 'flagger_resume',
                                 'entry_actions': ['arm', 'set_mode_guided',
-                                                  'send_guided_position_l_alt']}
+                                                  'takeoff']}
         return self.state, {'action': 'waiting', 'entry_actions': []}
 
     def _takeoff_l(self, vs, t):
@@ -251,7 +251,7 @@ class MissionStateMachine:
             self.state = MissionState.TAKEOFF_WA
             return self.state, {'action': 'landed_wa',
                                 'entry_actions': ['arm', 'set_mode_guided',
-                                                  'send_guided_position_wa_alt']}
+                                                  'takeoff']}
         if self._landing_state == 'ABORT_LAND':
             self.state = MissionState.ABORT
             self.abort_reason = 'Precision landing failed at WA'

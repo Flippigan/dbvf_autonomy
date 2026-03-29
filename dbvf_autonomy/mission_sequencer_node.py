@@ -8,7 +8,7 @@ from std_msgs.msg import Bool, String
 from dbvf_msgs.msg import VehicleState
 from dbvf_msgs.srv import (
     SetMode, ArmMotors, SendGuidedPosition, StartPrecisionLanding,
-    StartMission, ResumeMission, AbortMission, DoSetServo,
+    StartMission, ResumeMission, AbortMission, DoSetServo, Takeoff,
 )
 
 from dbvf_autonomy.mission_state_machine import MissionStateMachine, MissionState, get_mission_phase
@@ -87,6 +87,7 @@ class MissionSequencerNode(Node):
         self.precision_land_cli = self.create_client(
             StartPrecisionLanding, '/dbvf/start_precision_landing')
         self.servo_cli = self.create_client(DoSetServo, '/dbvf/do_set_servo')
+        self.takeoff_cli = self.create_client(Takeoff, '/dbvf/takeoff')
 
         # Service servers
         self.create_service(
@@ -205,7 +206,9 @@ class MissionSequencerNode(Node):
         cfg = self.mission_config
         alt = self._transit_alt_m
 
-        if action == 'set_mode_land':
+        if action == 'takeoff':
+            self._call_takeoff(alt)
+        elif action == 'set_mode_land':
             self._call_set_mode('LAND')
         elif action == 'set_mode_guided':
             self._call_set_mode('GUIDED')
@@ -233,6 +236,16 @@ class MissionSequencerNode(Node):
                 cfg['drop_servo_number'], cfg['drop_servo_pwm_release'])
 
     # -- Service call helpers -------------------------------------------------
+
+    def _call_takeoff(self, altitude):
+        if not self.takeoff_cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().error('takeoff service unavailable')
+            return
+        req = Takeoff.Request()
+        req.altitude = altitude
+        future = self.takeoff_cli.call_async(req)
+        future.add_done_callback(lambda f: self.get_logger().info(
+            f'Takeoff: {f.result().message}') if f.result() else None)
 
     def _call_set_mode(self, mode):
         if not self.set_mode_cli.wait_for_service(timeout_sec=1.0):
