@@ -151,3 +151,143 @@ Shows mode, armed status, GPS position, altitude, velocities.
 | `tag_confirm_frames` | 5 | Consecutive detections needed to confirm tag |
 | `tag_lost_timeout` | 4.0s | Seconds without detection before going back to search |
 | `landing_timeout` | 60.0s | Total time before aborting |
+
+---
+
+# Mission Sequencer — Full Autonomous Mission
+
+## Quick Start (Step by Step)
+
+You need **5 terminals** running in order:
+
+### Terminal 1: Gazebo + ArduPilot SITL
+```bash
+ros2 launch ardupilot_gz_bringup iris_runway.launch.py rviz:=true use_gz_tf:=true
+```
+Wait until Gazebo is fully loaded and the drone model is visible.
+
+### Terminal 2: Full Mission Stack
+```bash
+source /opt/ros/humble/setup.bash && source install/setup.bash
+ros2 launch dbvf_autonomy mission_sim.launch.py
+```
+This starts 6 nodes (apriltag_node, tag_detector_adapter, mavlink_interface, precision_landing, tag_visualizer, mission_sequencer). **Nothing happens yet** — the mission sequencer is in IDLE state.
+
+### Terminal 3: MAVProxy — Arm the Drone
+```bash
+mavproxy.py --master udpin:0.0.0.0:14550 --console
+```
+Then in MAVProxy:
+```
+mode guided
+arm throttle
+```
+**Do NOT takeoff manually** — the mission sequencer handles takeoff.
+
+### Terminal 4: Monitor Mission Progress
+```bash
+ros2 topic echo /dbvf/mission_state
+```
+And optionally in another pane:
+```bash
+ros2 topic echo /dbvf/mission_phase
+```
+
+### Terminal 5: Start the Mission
+```bash
+ros2 service call /dbvf/start_mission dbvf_msgs/srv/StartMission "{}"
+```
+
+---
+
+## Mission Sequence
+
+The mission sequencer runs a 17-state linear state machine covering the full DBVF competition:
+
+```
+IDLE → PREFLIGHT_CHECK → TAKEOFF_H → TRANSIT_H_TO_L → LAND_L → WAIT_FLAGGER
+       → TAKEOFF_L → TRANSIT_TO_DROP → DROP_PAYLOAD → TRANSIT_TO_WA → LAND_WA
+       → TAKEOFF_WA → TRANSIT_TO_DROP_2 → DROP_PAYLOAD_2 → TRANSIT_TO_H → LAND_H → COMPLETE
+```
+
+### FM-1: Fly to Landing Zone L
+1. **PREFLIGHT_CHECK** — Verifies armed + GUIDED mode
+2. **TAKEOFF_H** — Climbs to transit altitude (35ft / ~10.7m)
+3. **TRANSIT_H_TO_L** — Flies to landing zone L GPS coordinates
+4. **LAND_L** — Switches to LAND mode, waits for touchdown
+5. **WAIT_FLAGGER** — Waits on the ground for flagger approval
+
+To resume after the flagger gives the go-ahead:
+```bash
+ros2 service call /dbvf/resume_mission dbvf_msgs/srv/ResumeMission "{}"
+```
+
+### FM-2: Drop Red Payload
+6. **TAKEOFF_L** — Re-arms, climbs to transit altitude
+7. **TRANSIT_TO_DROP** — Flies to drop zone (F1 or F2, configurable)
+8. **DROP_PAYLOAD** — Actuates servo to release payload, waits for settle time
+
+### FM-3: Precision Land at WA, Pickup Yellow, Re-drop
+9. **TRANSIT_TO_WA** — Flies to WA (AprilTag landing pad)
+10. **LAND_WA** — Triggers precision landing system (AprilTag-guided)
+11. **TAKEOFF_WA** — Re-arms, climbs to transit altitude
+12. **TRANSIT_TO_DROP_2** — Flies back to drop zone
+13. **DROP_PAYLOAD_2** — Releases second payload
+
+### RTH: Return Home
+14. **TRANSIT_TO_H** — Flies back to home position
+15. **LAND_H** — Switches to LAND mode, lands
+16. **COMPLETE** — Mission finished
+
+---
+
+## Abort
+
+To abort at any time:
+```bash
+ros2 service call /dbvf/abort_mission dbvf_msgs/srv/AbortMission "{reason: 'Manual abort'}"
+```
+
+The mission also auto-aborts on:
+- **Mission timeout** (540s default, excludes WAIT_FLAGGER time)
+- **Heartbeat loss** (5s without ArduPilot heartbeat)
+- **Precision landing failure** at WA
+
+On abort, the drone switches to LAND mode and lands in place.
+
+---
+
+## Configuration (mission_params.yaml)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `home_lat` / `home_lon` | -35.3632621 / 149.1652374 | Home position GPS |
+| `landing_lat` / `landing_lon` | -35.3640000 / 149.1652374 | Landing zone L GPS |
+| `wa_lat` / `wa_lon` | -35.3632531 / 149.1657896 | WA (AprilTag pad) GPS |
+| `f1_lat` / `f1_lon` | -35.3650000 / 149.1652374 | Drop zone F1 GPS |
+| `f2_lat` / `f2_lon` | -35.3660000 / 149.1652374 | Drop zone F2 GPS |
+| `transit_altitude_ft` | 35.0 | Cruise altitude in feet |
+| `position_tolerance_m` | 3.0 | Lateral tolerance for waypoint arrival |
+| `takeoff_complete_alt_ft` | 33.0 | Altitude to consider takeoff complete |
+| `drop_servo_number` | 9 | Servo channel for payload release |
+| `drop_servo_pwm_release` | 1100 | PWM value to release payload |
+| `drop_servo_pwm_hold` | 1500 | PWM value to hold payload |
+| `drop_settle_time_s` | 2.0 | Time to wait after servo actuation |
+| `drop_target` | "F1" | Which drop zone to use ("F1" or "F2") |
+| `mission_timeout_s` | 540.0 | Total mission timeout (9 minutes) |
+| `prefer_rangefinder` | true | Use rangefinder altitude if available |
+
+---
+
+## What to Watch
+
+### Monitor mission state and phase
+```bash
+ros2 topic echo /dbvf/mission_state    # Current FSM state (e.g., TRANSIT_H_TO_L)
+ros2 topic echo /dbvf/mission_phase    # Current phase (FM1, FM2, FM3, RTH)
+```
+
+### All DBVF topics
+```bash
+ros2 topic list | grep dbvf
+```
