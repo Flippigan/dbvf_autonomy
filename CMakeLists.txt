@@ -39,6 +39,7 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_descent_clamp test/test_descent_rate_clamp.py)
   ament_add_pytest_test(test_mission_helpers test/test_mission_helpers.py)
   ament_add_pytest_test(test_mission_config test/test_mission_config.py)
+  ament_add_pytest_test(test_mission_fsm test/test_mission_state_machine.py)
 endif()
 
 ament_package()
