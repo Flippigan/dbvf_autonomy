@@ -304,7 +304,8 @@ def test_drop_payload_complete():
 
 
 # ---------------------------------------------------------------------------
-# FM-3: TRANSIT_TO_WA -> LAND_WA -> TAKEOFF_WA -> TRANSIT_TO_DROP_2 -> DROP_PAYLOAD_2
+# FM-3: TRANSIT_TO_WA -> LAND_WA_DESCEND -> WA_DROP_OLD_PAYLOAD ->
+#        WA_SERVO_RESET -> LAND_WA_FINAL -> TAKEOFF_WA -> ...
 # ---------------------------------------------------------------------------
 
 def _to_transit_to_wa(sm):
@@ -327,39 +328,42 @@ def test_transit_to_wa_arrived():
     _to_transit_to_wa(sm)
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=11.0, armed=True, mode='GUIDED')
     state, info = sm.update(vs, 9.0)
-    assert state == MissionState.LAND_WA
+    assert state == MissionState.LAND_WA_DESCEND
     assert 'start_precision_landing' in info['entry_actions']
 
 
-def _to_land_wa(sm):
+# -- LAND_WA_DESCEND --------------------------------------------------------
+
+def _to_land_wa_descend(sm):
     _to_transit_to_wa(sm)
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=11.0, armed=True, mode='GUIDED')
     sm.update(vs, 9.0)
-    assert sm.state == MissionState.LAND_WA
+    assert sm.state == MissionState.LAND_WA_DESCEND
 
 
-def test_land_wa_waiting():
+def test_land_wa_descend_waiting():
     sm = MissionStateMachine(_make_config())
-    _to_land_wa(sm)
+    _to_land_wa_descend(sm)
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=5.0, armed=True, mode='LAND')
     state, info = sm.update(vs, 10.0)
-    assert state == MissionState.LAND_WA
+    assert state == MissionState.LAND_WA_DESCEND
     assert info['action'] == 'precision_landing'
 
 
-def test_land_wa_success():
+def test_land_wa_descend_to_drop():
     sm = MissionStateMachine(_make_config())
-    _to_land_wa(sm)
-    sm.set_landing_state('LANDED')
-    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
+    _to_land_wa_descend(sm)
+    sm.set_landing_state('DESCEND_HOLD')
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
     state, info = sm.update(vs, 10.0)
-    assert state == MissionState.TAKEOFF_WA
-    assert info['action'] == 'landed_wa'
+    assert state == MissionState.WA_DROP_OLD_PAYLOAD
+    assert info['action'] == 'descend_hold_reached'
+    assert 'arduino_servo_release' in info['entry_actions']
 
 
-def test_land_wa_abort():
+def test_land_wa_descend_abort():
     sm = MissionStateMachine(_make_config())
-    _to_land_wa(sm)
+    _to_land_wa_descend(sm)
     sm.set_landing_state('ABORT_LAND')
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=1.0, armed=True)
     state, info = sm.update(vs, 10.0)
@@ -367,11 +371,107 @@ def test_land_wa_abort():
     assert 'Precision landing failed' in info['reason']
 
 
-def _to_takeoff_wa(sm):
-    _to_land_wa(sm)
+# -- WA_DROP_OLD_PAYLOAD -----------------------------------------------------
+
+def _to_wa_drop_old_payload(sm):
+    _to_land_wa_descend(sm)
+    sm.set_landing_state('DESCEND_HOLD')
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
+    sm.update(vs, 10.0)
+    assert sm.state == MissionState.WA_DROP_OLD_PAYLOAD
+
+
+def test_wa_drop_old_payload_waiting():
+    sm = MissionStateMachine(_make_config())
+    _to_wa_drop_old_payload(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
+    state, info = sm.update(vs, 11.0)  # 1.0s < 2.0s settle
+    assert state == MissionState.WA_DROP_OLD_PAYLOAD
+    assert info['action'] == 'dropping_old_payload'
+
+
+def test_wa_drop_old_payload_complete():
+    sm = MissionStateMachine(_make_config())
+    _to_wa_drop_old_payload(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
+    state, info = sm.update(vs, 12.1)  # 2.1s > 2.0s settle
+    assert state == MissionState.WA_SERVO_RESET
+    assert info['action'] == 'drop_old_complete'
+    assert 'arduino_servo_pickup' in info['entry_actions']
+
+
+# -- WA_SERVO_RESET ----------------------------------------------------------
+
+def _to_wa_servo_reset(sm):
+    _to_wa_drop_old_payload(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
+    sm.update(vs, 12.1)  # settle elapsed
+    assert sm.state == MissionState.WA_SERVO_RESET
+
+
+def test_wa_servo_reset_waiting():
+    sm = MissionStateMachine(_make_config())
+    _to_wa_servo_reset(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
+    state, info = sm.update(vs, 13.0)  # 0.9s < 2.0s settle
+    assert state == MissionState.WA_SERVO_RESET
+    assert info['action'] == 'resetting_servo'
+
+
+def test_wa_servo_reset_complete():
+    sm = MissionStateMachine(_make_config())
+    _to_wa_servo_reset(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
+    state, info = sm.update(vs, 14.2)  # 2.1s > 2.0s settle
+    assert state == MissionState.LAND_WA_FINAL
+    assert info['action'] == 'servo_reset_complete'
+
+
+# -- LAND_WA_FINAL -----------------------------------------------------------
+
+def _to_land_wa_final(sm):
+    _to_wa_servo_reset(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
+    sm.update(vs, 14.2)  # settle elapsed
+    assert sm.state == MissionState.LAND_WA_FINAL
+
+
+def test_land_wa_final_waiting():
+    sm = MissionStateMachine(_make_config())
+    _to_land_wa_final(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.3, armed=True)
+    state, info = sm.update(vs, 15.0)
+    assert state == MissionState.LAND_WA_FINAL
+    assert info['action'] == 'final_descent'
+
+
+def test_land_wa_final_success():
+    sm = MissionStateMachine(_make_config())
+    _to_land_wa_final(sm)
     sm.set_landing_state('LANDED')
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
-    sm.update(vs, 10.0)
+    state, info = sm.update(vs, 15.0)
+    assert state == MissionState.TAKEOFF_WA
+    assert info['action'] == 'landed_wa'
+
+
+def test_land_wa_final_abort():
+    sm = MissionStateMachine(_make_config())
+    _to_land_wa_final(sm)
+    sm.set_landing_state('ABORT_LAND')
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
+    state, info = sm.update(vs, 15.0)
+    assert state == MissionState.ABORT
+    assert 'Precision landing failed' in info['reason']
+
+
+# -- TAKEOFF_WA (updated helper) ---------------------------------------------
+
+def _to_takeoff_wa(sm):
+    _to_land_wa_final(sm)
+    sm.set_landing_state('LANDED')
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
+    sm.update(vs, 15.0)
     assert sm.state == MissionState.TAKEOFF_WA
 
 
@@ -528,7 +628,10 @@ def test_phase_fm2():
 
 def test_phase_fm3():
     from dbvf_autonomy.mission_state_machine import get_mission_phase
-    assert get_mission_phase(MissionState.LAND_WA) == 'FM3'
+    assert get_mission_phase(MissionState.LAND_WA_DESCEND) == 'FM3'
+    assert get_mission_phase(MissionState.WA_DROP_OLD_PAYLOAD) == 'FM3'
+    assert get_mission_phase(MissionState.WA_SERVO_RESET) == 'FM3'
+    assert get_mission_phase(MissionState.LAND_WA_FINAL) == 'FM3'
     assert get_mission_phase(MissionState.DROP_PAYLOAD_2) == 'FM3'
 
 

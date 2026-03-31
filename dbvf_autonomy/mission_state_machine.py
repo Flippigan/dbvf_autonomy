@@ -15,7 +15,10 @@ class MissionState(Enum):
     TRANSIT_TO_DROP = 'TRANSIT_TO_DROP'
     DROP_PAYLOAD = 'DROP_PAYLOAD'
     TRANSIT_TO_WA = 'TRANSIT_TO_WA'
-    LAND_WA = 'LAND_WA'
+    LAND_WA_DESCEND = 'LAND_WA_DESCEND'
+    WA_DROP_OLD_PAYLOAD = 'WA_DROP_OLD_PAYLOAD'
+    WA_SERVO_RESET = 'WA_SERVO_RESET'
+    LAND_WA_FINAL = 'LAND_WA_FINAL'
     TAKEOFF_WA = 'TAKEOFF_WA'
     TRANSIT_TO_DROP_2 = 'TRANSIT_TO_DROP_2'
     DROP_PAYLOAD_2 = 'DROP_PAYLOAD_2'
@@ -37,7 +40,10 @@ _STATE_TO_PHASE = {
     MissionState.TRANSIT_TO_DROP: 'FM2',
     MissionState.DROP_PAYLOAD: 'FM2',
     MissionState.TRANSIT_TO_WA: 'FM3',
-    MissionState.LAND_WA: 'FM3',
+    MissionState.LAND_WA_DESCEND: 'FM3',
+    MissionState.WA_DROP_OLD_PAYLOAD: 'FM3',
+    MissionState.WA_SERVO_RESET: 'FM3',
+    MissionState.LAND_WA_FINAL: 'FM3',
     MissionState.TAKEOFF_WA: 'FM3',
     MissionState.TRANSIT_TO_DROP_2: 'FM3',
     MissionState.DROP_PAYLOAD_2: 'FM3',
@@ -66,6 +72,9 @@ class MissionStateMachine:
         # DROP_PAYLOAD timing
         self._drop_start_time = None
 
+        # WA reload timing
+        self._wa_drop_start_time = None
+
         # LAND_WA tracking
         self._landing_state = None
 
@@ -84,6 +93,7 @@ class MissionStateMachine:
         self.abort_reason = ''
         self._resume_requested = False
         self._drop_start_time = None
+        self._wa_drop_start_time = None
         self._landing_state = None
         self._last_guided_send_time = 0.0
 
@@ -236,7 +246,7 @@ class MissionStateMachine:
         wa_lon = self.config['wa_lon']
         dist = haversine_distance_m(vs.lat, vs.lon, wa_lat, wa_lon)
         if dist < self._tolerance:
-            self.state = MissionState.LAND_WA
+            self.state = MissionState.LAND_WA_DESCEND
             self._landing_state = None
             return self.state, {'action': 'arrived_wa',
                                 'entry_actions': ['start_precision_landing']}
@@ -246,7 +256,37 @@ class MissionStateMachine:
             self._last_guided_send_time = t
         return self.state, {'action': 'transiting', 'entry_actions': entry}
 
-    def _land_wa(self, vs, t):
+    def _land_wa_descend(self, vs, t):
+        if self._landing_state == 'DESCEND_HOLD':
+            self.state = MissionState.WA_DROP_OLD_PAYLOAD
+            self._wa_drop_start_time = t
+            return self.state, {'action': 'descend_hold_reached',
+                                'entry_actions': ['arduino_servo_release']}
+        if self._landing_state == 'ABORT_LAND':
+            self.state = MissionState.ABORT
+            self.abort_reason = 'Precision landing failed at WA'
+            return self.state, {'action': 'aborted', 'reason': self.abort_reason,
+                                'entry_actions': ['set_mode_land']}
+        return self.state, {'action': 'precision_landing', 'entry_actions': []}
+
+    def _wa_drop_old_payload(self, vs, t):
+        elapsed = t - self._wa_drop_start_time
+        if elapsed >= self.config['pickup_settle_time_s']:
+            self._wa_drop_start_time = t
+            self.state = MissionState.WA_SERVO_RESET
+            return self.state, {'action': 'drop_old_complete',
+                                'entry_actions': ['arduino_servo_pickup']}
+        return self.state, {'action': 'dropping_old_payload', 'entry_actions': []}
+
+    def _wa_servo_reset(self, vs, t):
+        elapsed = t - self._wa_drop_start_time
+        if elapsed >= self.config['pickup_settle_time_s']:
+            self.state = MissionState.LAND_WA_FINAL
+            return self.state, {'action': 'servo_reset_complete',
+                                'entry_actions': []}
+        return self.state, {'action': 'resetting_servo', 'entry_actions': []}
+
+    def _land_wa_final(self, vs, t):
         if self._landing_state == 'LANDED':
             self.state = MissionState.TAKEOFF_WA
             return self.state, {'action': 'landed_wa',
@@ -257,7 +297,7 @@ class MissionStateMachine:
             self.abort_reason = 'Precision landing failed at WA'
             return self.state, {'action': 'aborted', 'reason': self.abort_reason,
                                 'entry_actions': ['set_mode_land']}
-        return self.state, {'action': 'precision_landing', 'entry_actions': []}
+        return self.state, {'action': 'final_descent', 'entry_actions': []}
 
     def _takeoff_wa(self, vs, t):
         alt = self._get_altitude(vs)
@@ -322,7 +362,10 @@ class MissionStateMachine:
         MissionState.TRANSIT_TO_DROP: _transit_to_drop,
         MissionState.DROP_PAYLOAD: _drop_payload,
         MissionState.TRANSIT_TO_WA: _transit_to_wa,
-        MissionState.LAND_WA: _land_wa,
+        MissionState.LAND_WA_DESCEND: _land_wa_descend,
+        MissionState.WA_DROP_OLD_PAYLOAD: _wa_drop_old_payload,
+        MissionState.WA_SERVO_RESET: _wa_servo_reset,
+        MissionState.LAND_WA_FINAL: _land_wa_final,
         MissionState.TAKEOFF_WA: _takeoff_wa,
         MissionState.TRANSIT_TO_DROP_2: _transit_to_drop_2,
         MissionState.DROP_PAYLOAD_2: _drop_payload_2,
