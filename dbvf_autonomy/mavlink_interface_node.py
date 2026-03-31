@@ -4,11 +4,11 @@ import threading
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from pymavlink import mavutil
 
 from dbvf_msgs.msg import LandingTargetPose, VehicleState
-from dbvf_msgs.srv import SetMode, ArmMotors, SendGuidedPosition, SendGuidedVelocity, DoSetServo, Takeoff
+from dbvf_msgs.srv import SetMode, ArmMotors, SendGuidedPosition, SendGuidedVelocity, DoSetServo, Takeoff, StartMission, ResumeMission
 
 
 # ArduCopter custom mode numbers
@@ -78,6 +78,9 @@ class MavlinkInterfaceNode(Node):
         self.declare_parameter('source_component', 0)
         self.declare_parameter('heartbeat_rate', 1.0)
         self.declare_parameter('vehicle_state_rate', 10.0)
+        self.declare_parameter('rc_start_channel', 14)
+        self.declare_parameter('rc_resume_channel', 15)
+        self.declare_parameter('rc_trigger_pwm', 1700)
 
         self.conn = None
         self.lock = threading.Lock()
@@ -95,9 +98,13 @@ class MavlinkInterfaceNode(Node):
         self.range_alt = RANGE_ALT_SENTINEL
         self.last_heartbeat_time = 0.0
 
+        # RC channel edge detection state (None = no reading yet)
+        self._rc_prev = {}
+
         # Publishers
         self.state_pub = self.create_publisher(VehicleState, '/dbvf/vehicle_state', 10)
         self.heartbeat_pub = self.create_publisher(Bool, '/dbvf/heartbeat_status', 10)
+        self.rc_trigger_pub = self.create_publisher(String, '/dbvf/rc_trigger', 10)
 
         # Subscriber: high-rate landing target forwarding
         self.landing_target_sub = self.create_subscription(
@@ -116,6 +123,12 @@ class MavlinkInterfaceNode(Node):
             DoSetServo, '/dbvf/do_set_servo', self._do_set_servo_cb)
         self.create_service(
             Takeoff, '/dbvf/takeoff', self._takeoff_cb)
+
+        # RC trigger service clients
+        self.start_mission_client = self.create_client(
+            StartMission, '/dbvf/start_mission')
+        self.resume_mission_client = self.create_client(
+            ResumeMission, '/dbvf/resume_mission')
 
         # Connect to ArduPilot
         self._connect()
@@ -195,6 +208,8 @@ class MavlinkInterfaceNode(Node):
                     self.vehicle_heading = msg.hdg / 100.0
                 elif mtype == 'RANGEFINDER':
                     self.range_alt = extract_rangefinder_distance(msg)
+                elif mtype == 'RC_CHANNELS':
+                    self._handle_rc_channels(msg)
 
         state = VehicleState()
         state.header.stamp = self.get_clock().now().to_msg()
@@ -209,6 +224,40 @@ class MavlinkInterfaceNode(Node):
         state.heading = self.vehicle_heading
         state.range_alt = self.range_alt
         self.state_pub.publish(state)
+
+    def _handle_rc_channels(self, msg):
+        """Process RC_CHANNELS message for mission trigger edge detection."""
+        threshold = self.get_parameter('rc_trigger_pwm').value
+        triggers = [
+            (self.get_parameter('rc_start_channel').value,
+             self.start_mission_client, 'START', StartMission.Request()),
+            (self.get_parameter('rc_resume_channel').value,
+             self.resume_mission_client, 'RESUME', ResumeMission.Request()),
+        ]
+        for channel, client, label, request in triggers:
+            current = get_rc_channel_pwm(msg, channel)
+            prev = self._rc_prev.get(channel)
+            if detect_rc_rising_edge(current, prev, threshold):
+                self.get_logger().info(
+                    f'RC trigger: {label} (ch{channel} PWM={current})')
+                trigger_msg = String()
+                trigger_msg.data = label
+                self.rc_trigger_pub.publish(trigger_msg)
+                future = client.call_async(request)
+                future.add_done_callback(
+                    lambda f, l=label: self._rc_service_done(f, l))
+            self._rc_prev[channel] = current
+
+    def _rc_service_done(self, future, label):
+        """Log result of RC-triggered service call."""
+        try:
+            result = future.result()
+            if result.success:
+                self.get_logger().info(f'RC {label}: {result.message}')
+            else:
+                self.get_logger().warn(f'RC {label} rejected: {result.message}')
+        except Exception as e:
+            self.get_logger().warn(f'RC {label} service call failed: {e}')
 
     # -- Subscriber callbacks -------------------------------------------------
 
