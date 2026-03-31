@@ -97,4 +97,9 @@ colcon build --packages-select dbvf_msgs dbvf_autonomy
 - Precision landing spec: `docs/superpowers/specs/2026-03-27-precision-landing-design.md`
 - Mission sequencer spec: `docs/superpowers/specs/2026-03-29-mission-sequencer-design.md`
 - Mission sequencer plan: `docs/superpowers/plans/2026-03-29-mission-sequencer.md`
+- RC mission control plan: `docs/superpowers/plans/2026-03-30-rc-mission-control.md`
 - Bug log: `docs/superpowers/Log/`
+
+## Team Integration Docs
+
+- **GUI integration guide:** `docs/Features/GUI/mission_sequencer_gui_integration.md` — GPS waypoints the GUI must set, all `/dbvf/mission_state` and `/dbvf/mission_phase` values for feedback display, available services (start/resume/abort), and suggested GUI layout
