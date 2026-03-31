@@ -54,6 +54,21 @@ def build_landing_target_params(angle_x, angle_y, position_x, position_y,
     }
 
 
+def detect_rc_rising_edge(current_pwm, prev_pwm, threshold):
+    """Return True if PWM crossed above threshold (rising edge).
+
+    Returns False if prev_pwm is None (first reading — boot safety).
+    """
+    if prev_pwm is None:
+        return False
+    return current_pwm >= threshold and prev_pwm < threshold
+
+
+def get_rc_channel_pwm(msg, channel):
+    """Extract PWM value for a specific RC channel (1-18) from RC_CHANNELS message."""
+    return getattr(msg, f'chan{channel}_raw')
+
+
 class MavlinkInterfaceNode(Node):
     def __init__(self):
         super().__init__('mavlink_interface')
