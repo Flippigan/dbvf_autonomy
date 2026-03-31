@@ -23,6 +23,7 @@ install(PROGRAMS
   scripts/precision_landing_node
   scripts/tag_visualizer_node
   scripts/mission_sequencer_node
+  scripts/arduino_interface_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -42,6 +43,7 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_mission_config test/test_mission_config.py)
   ament_add_pytest_test(test_mission_fsm test/test_mission_state_machine.py)
   ament_add_pytest_test(test_rc_trigger test/test_rc_trigger.py)
+  ament_add_pytest_test(test_arduino test/test_arduino_interface.py)
 endif()
 
 ament_package()
