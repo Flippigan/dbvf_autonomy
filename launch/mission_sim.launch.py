@@ -28,9 +28,9 @@ def generate_launch_description():
             ],
             parameters=[{
                 'family': '36h11',
-                'size': 0.6,
-                'tag.ids': [0, 1],
-                'tag.sizes': [0.6, 0.15],
+                'size': 0.15,
+                'tag.ids': [1, 2],
+                'tag.sizes': [0.15, 0.10],
             }],
         ),
 
@@ -63,6 +63,14 @@ def generate_launch_description():
             package='dbvf_autonomy',
             executable='tag_visualizer_node',
             name='tag_visualizer',
+        ),
+
+        # Arduino serial interface
+        Node(
+            package='dbvf_autonomy',
+            executable='arduino_interface_node',
+            name='arduino_interface',
+            parameters=[sim_config],
         ),
 
         # Mission sequencer
