@@ -70,7 +70,7 @@ class ArduinoInterfaceNode(Node):
             success, msg = parse_servo_response(raw)
             response.success = success
             response.message = msg
-        except serial.SerialException as e:
+        except (serial.SerialException, UnicodeDecodeError) as e:
             self.get_logger().warn(f'Serial error: {e}')
             self._serial = None
             response.success = False
