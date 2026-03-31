@@ -38,6 +38,10 @@ class MissionSequencerNode(Node):
             'drop_servo_pwm_release': 1100,
             'drop_servo_pwm_hold': 1500,
             'drop_settle_time_s': 2.0,
+            'pickup_servo_number': 1,
+            'pickup_servo_pwm_release': 1100,
+            'pickup_servo_pwm_pickup': 1500,
+            'pickup_settle_time_s': 2.0,
             'drop_target': 'F1',
             'mission_timeout_s': 540.0,
             'heartbeat_loss_timeout_s': 5.0,
@@ -88,6 +92,8 @@ class MissionSequencerNode(Node):
             StartPrecisionLanding, '/dbvf/start_precision_landing')
         self.servo_cli = self.create_client(DoSetServo, '/dbvf/do_set_servo')
         self.takeoff_cli = self.create_client(Takeoff, '/dbvf/takeoff')
+        self.arduino_servo_cli = self.create_client(
+            DoSetServo, '/dbvf/arduino/set_servo')
 
         # Service servers
         self.create_service(
@@ -234,6 +240,12 @@ class MissionSequencerNode(Node):
         elif action == 'servo_release':
             self._call_set_servo(
                 cfg['drop_servo_number'], cfg['drop_servo_pwm_release'])
+        elif action == 'arduino_servo_release':
+            self._call_arduino_servo(
+                cfg['pickup_servo_number'], cfg['pickup_servo_pwm_release'])
+        elif action == 'arduino_servo_pickup':
+            self._call_arduino_servo(
+                cfg['pickup_servo_number'], cfg['pickup_servo_pwm_pickup'])
 
     # -- Service call helpers -------------------------------------------------
 
@@ -298,6 +310,17 @@ class MissionSequencerNode(Node):
         future = self.servo_cli.call_async(req)
         future.add_done_callback(lambda f: self.get_logger().info(
             f'Servo: {f.result().message}') if f.result() else None)
+
+    def _call_arduino_servo(self, servo_number, pwm):
+        if not self.arduino_servo_cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().warn('arduino/set_servo service unavailable')
+            return
+        req = DoSetServo.Request()
+        req.servo_number = servo_number
+        req.pwm = pwm
+        future = self.arduino_servo_cli.call_async(req)
+        future.add_done_callback(lambda f: self.get_logger().info(
+            f'Arduino servo: {f.result().message}') if f.result() else None)
 
 
 def main():
