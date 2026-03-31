@@ -37,3 +37,26 @@ def test_zero_altitude_invalid():
     cfg = _make_config(transit_altitude_ft=0.0)
     errors = validate_mission_config(cfg)
     assert any('transit_altitude_ft' in e for e in errors)
+
+
+def test_negative_pickup_settle_time():
+    cfg = _make_config(pickup_settle_time_s=-1.0)
+    errors = validate_mission_config(cfg)
+    assert any('pickup_settle_time_s' in e for e in errors)
+
+
+def test_zero_pickup_settle_time():
+    cfg = _make_config(pickup_settle_time_s=0.0)
+    errors = validate_mission_config(cfg)
+    assert any('pickup_settle_time_s' in e for e in errors)
+
+
+def test_valid_config_with_pickup_params():
+    cfg = _make_config(
+        pickup_servo_number=1,
+        pickup_servo_pwm_release=1100,
+        pickup_servo_pwm_pickup=1500,
+        pickup_settle_time_s=2.0,
+    )
+    errors = validate_mission_config(cfg)
+    assert errors == []
