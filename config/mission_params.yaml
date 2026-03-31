@@ -46,6 +46,12 @@ mission_sequencer:
     drop_servo_pwm_hold: 1500
     drop_settle_time_s: 2.0
 
+    # ── WA Reload Servo (Arduino) ─────────────────────────────────
+    pickup_servo_number: 1
+    pickup_servo_pwm_release: 1100
+    pickup_servo_pwm_pickup: 1500
+    pickup_settle_time_s: 2.0
+
     # ── Drop Zone Target ──────────────────────────────────────────
     # "F1" (7x7ft, +2.5pts) or "F2" (3x3ft, +5pts)
     drop_target: "F1"

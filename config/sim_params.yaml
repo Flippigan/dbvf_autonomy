@@ -8,10 +8,10 @@ mavlink_interface:
 
 tag_detector_adapter:
   ros__parameters:
-    primary_tag_id: 0
-    secondary_tag_id: 1
-    primary_tag_size: 0.6
-    secondary_tag_size: 0.15
+    primary_tag_id: 1
+    secondary_tag_id: 2
+    primary_tag_size: 0.15
+    secondary_tag_size: 0.10
     debounce_buffer_size: 30
     debounce_threshold: 0.8
     detection_topic: "/apriltag/detections"
@@ -36,8 +36,8 @@ precision_landing:
 
     # Small tag detection
     small_tag_confirm_time: 2.0
-    hold_stabilize_time: 1.0
-    secondary_tag_id: 1
+    hold_stabilize_time: 6.0
+    secondary_tag_id: 2
 
     # Offset from small tag
     offset_forward: 0.0
@@ -57,3 +57,9 @@ precision_landing:
     servo_pid_i: 0.0
     servo_pid_d: 0.1
     servo_max_speed: 0.5
+
+arduino_interface:
+  ros__parameters:
+    serial_port: "/dev/ttyACM0"
+    baud_rate: 115200
+    serial_timeout_s: 1.0
