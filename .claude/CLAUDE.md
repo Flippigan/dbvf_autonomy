@@ -63,6 +63,7 @@ Never `from dbvf_autonomy.msg import ...` — that path does not exist.
 - Delegates to: `set_mode`, `arm_motors`, `takeoff`, `send_guided_position`, `start_precision_landing`, `do_set_servo`, `arduino/set_servo`
 - Publishes: `/dbvf/mission_state` (10Hz), `/dbvf/mission_phase` (on change)
 - Services: `/dbvf/start_mission`, `/dbvf/resume_mission`, `/dbvf/abort_mission`
+- **Resume:** `/dbvf/resume_mission` auto-handles GUIDED mode, arming, and takeoff — no manual MAVProxy steps needed after WAIT_FLAGGER
 - Config: `config/mission_params.yaml` — GPS waypoints, flight params, servo config, safety timeouts
 - **Important:** ROS2 message objects use `__slots__` — cannot set dynamic attributes. The node wraps `VehicleState` into a plain Python object before passing to the FSM.
 

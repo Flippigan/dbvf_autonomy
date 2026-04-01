@@ -155,7 +155,7 @@ Response: `bool success, string message`
 
 ### `/dbvf/resume_mission` (`dbvf_msgs/srv/ResumeMission`)
 
-Resume from WAIT_FLAGGER (after flagger gives go-ahead). Only works when state is `WAIT_FLAGGER`.
+Resume from WAIT_FLAGGER (after flagger gives go-ahead). Only works when state is `WAIT_FLAGGER`. **Automatically sets GUIDED mode, arms the throttle, and commands takeoff** — no manual MAVProxy steps required. This is the only button the team needs to press to continue the mission after the flagger approves.
 
 ```bash
 ros2 service call /dbvf/resume_mission dbvf_msgs/srv/ResumeMission "{}"

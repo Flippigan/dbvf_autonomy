@@ -394,8 +394,6 @@ class PrecisionLandingNode(Node):
         self.declare_parameter('servo_max_speed', 0.5)
         self.declare_parameter('primary_tag_id', 1)
         self.declare_parameter('secondary_tag_id', 2)
-        self.declare_parameter('search_step_interval', 3.0)
-        self.declare_parameter('search_step_amount', 0.5)
         self.declare_parameter('slow_descent_altitude', 2.0)
         self.declare_parameter('slow_descent_rate', 0.1)
 
@@ -423,8 +421,6 @@ class PrecisionLandingNode(Node):
         self.pid_x = PIDController(kp, ki, kd, max_speed)
         self.pid_y = PIDController(kp, ki, kd, max_speed)
 
-        self._search_step_interval = self.get_parameter('search_step_interval').value
-        self._search_step_amount = self.get_parameter('search_step_amount').value
         self._slow_descent_altitude = self.get_parameter('slow_descent_altitude').value
         self._slow_descent_rate = self.get_parameter('slow_descent_rate').value
         self._slow_descent_active = False
@@ -433,7 +429,6 @@ class PrecisionLandingNode(Node):
         self.latest_tag_status = None
         self.latest_vehicle_state = None
         self._search_target_alt = 0.0
-        self._search_last_stepdown = 0.0
         self._last_guided_time = 0.0
         self._last_control_time = 0.0
 
@@ -525,7 +520,6 @@ class PrecisionLandingNode(Node):
             if state == LandingState.SEARCH:
                 self._call_set_mode('GUIDED')
                 self._search_target_alt = vs.alt_rel
-                self._search_last_stepdown = now
                 self.pid_x.reset()
                 self.pid_y.reset()
             elif state == LandingState.DESCEND_COARSE:
@@ -549,23 +543,10 @@ class PrecisionLandingNode(Node):
                 self._last_guided_time = now
 
         elif state == LandingState.SEARCH:
-            tag_seen = (self.latest_tag_status
-                        and self.latest_tag_status.detected)
-            if tag_seen:
-                self._search_target_alt -= self.search_descent_rate * 0.05
-                self._search_target_alt = max(
-                    self._search_target_alt,
-                    self.fsm.config['min_search_altitude'])
-            else:
-                if now - self._search_last_stepdown >= self._search_step_interval:
-                    self._search_target_alt -= self._search_step_amount
-                    self._search_target_alt = max(
-                        self._search_target_alt,
-                        self.fsm.config['min_search_altitude'])
-                    self.get_logger().info(
-                        f'SEARCH step-down (no tag): target_alt='
-                        f'{self._search_target_alt:.1f}m')
-                    self._search_last_stepdown = now
+            self._search_target_alt -= self.search_descent_rate * 0.05
+            self._search_target_alt = max(
+                self._search_target_alt,
+                self.fsm.config['min_search_altitude'])
             if now - self._last_guided_time >= 0.5:
                 self._call_guided_position(
                     self.fsm.target_lat, self.fsm.target_lon,
