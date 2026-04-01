@@ -206,7 +206,7 @@ class MissionStateMachine:
             self._resume_requested = False
             self.state = MissionState.TAKEOFF_L
             return self.state, {'action': 'flagger_resume',
-                                'entry_actions': ['arm', 'set_mode_guided',
+                                'entry_actions': ['set_mode_guided', 'arm',
                                                   'takeoff']}
         return self.state, {'action': 'waiting', 'entry_actions': []}
 
@@ -290,7 +290,7 @@ class MissionStateMachine:
         if self._landing_state == 'LANDED':
             self.state = MissionState.TAKEOFF_WA
             return self.state, {'action': 'landed_wa',
-                                'entry_actions': ['arm', 'set_mode_guided',
+                                'entry_actions': ['set_mode_guided', 'arm',
                                                   'takeoff']}
         if self._landing_state == 'ABORT_LAND':
             self.state = MissionState.ABORT
@@ -377,7 +377,10 @@ class MissionStateMachine:
 
     def _get_altitude(self, vs):
         """Return best available altitude in meters."""
-        if self.config.get('prefer_rangefinder', True) and vs.range_alt >= 0.0:
+        max_range = self.config.get('rangefinder_max_m', 30.0)
+        if (self.config.get('prefer_rangefinder', True)
+                and vs.range_alt >= 0.0
+                and vs.range_alt <= max_range):
             return vs.range_alt
         return vs.alt_rel
 

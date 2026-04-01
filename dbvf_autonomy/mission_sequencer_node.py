@@ -48,6 +48,7 @@ class MissionSequencerNode(Node):
             'service_call_timeout_s': 5.0,
             'guided_resend_interval_s': 1.0,
             'prefer_rangefinder': True,
+            'rangefinder_max_m': 30.0,
         }
         for name, default in param_defaults.items():
             self.declare_parameter(name, default)

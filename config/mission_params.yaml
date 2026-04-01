@@ -12,26 +12,26 @@ mission_sequencer:
     # COMPETITION: home_lon: <from organizers>
 
     # Landing zone (L) — FM-1 land target, 15x15ft zone with flagger
-    landing_lat: -35.3640000
-    landing_lon: 149.1652374
+    landing_lat: -35.3632621                                                                                                                                 
+    landing_lon: 149.1662471
     # COMPETITION: landing_lat: <from organizers>
     # COMPETITION: landing_lon: <from organizers>
 
     # Water Autonomous (WA) — FM-3 precision landing pad, 20x20ft zone
-    wa_lat: -35.3632531
-    wa_lon: 149.1657896
+    wa_lat: -35.3633033
+    wa_lon: 149.1657423
     # COMPETITION: wa_lat: <from organizers>
     # COMPETITION: wa_lon: <from organizers>
 
     # Fire 1 (F1) — drop zone, 7x7ft, +2.5pts/payload
-    f1_lat: -35.3650000
-    f1_lon: 149.1652374
+    f1_lat: -35.3632621
+    f1_lon: 149.1665841
     # COMPETITION: f1_lat: <from organizers>
     # COMPETITION: f1_lon: <from organizers>
 
     # Fire 2 (F2) — drop zone, 3x3ft, +5pts/payload
-    f2_lat: -35.3660000
-    f2_lon: 149.1652374
+    f2_lat: -35.3632621
+    f2_lon: 149.1669210
     # COMPETITION: f2_lat: <from organizers>
     # COMPETITION: f2_lon: <from organizers>
 
@@ -64,6 +64,7 @@ mission_sequencer:
 
     # ── Altitude Source ────────────────────────────────────────────
     prefer_rangefinder: true
+    rangefinder_max_m: 30.0             # RNGFND1_MAX_CM / 100; reject readings above this
 
 mavlink_interface:
   ros__parameters:

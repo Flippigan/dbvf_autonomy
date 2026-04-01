@@ -109,6 +109,17 @@ float64 heading    # Degrees
 float64 range_alt  # Rangefinder altitude (-1.0 if unavailable)
 ```
 
+### `/dbvf/altitude_source` (`std_msgs/String`) — *planned, not yet implemented*
+
+Published at **10 Hz** by mission_sequencer_node. Indicates which altitude sensor the FSM is currently trusting for altitude decisions.
+
+| Value | Meaning |
+|-------|---------|
+| `"rangefinder"` | Rangefinder reading is valid (>= 0.0 and <= `rangefinder_max_m`) and being used |
+| `"barometer"` | Falling back to barometric `alt_rel` (rangefinder unavailable or out of range) |
+
+The GUI can combine this with the raw values from `/dbvf/vehicle_state` (`range_alt` and `alt_rel`) to show both readings and highlight which one is active. Useful for diagnosing altitude sensor issues in flight.
+
 ### `/dbvf/heartbeat_status` (`std_msgs/Bool`)
 
 Published at **1 Hz**. `true` if ArduPilot heartbeat received within last 3 seconds. GUI can show a connection indicator.
@@ -172,7 +183,9 @@ Response: `bool success, string message`
 +--------------------------------------------------+
 |  Phase: FM2           State: TRANSIT_TO_DROP      |
 |  Mode:  GUIDED        Armed: YES                  |
-|  Alt:   10.7m (35ft)  GPS: -35.3645, 149.1652    |
+|  Alt:   10.7m (35ft)  Src: rangefinder            |
+|  Rng:   10.7m   Baro: 10.9m                      |
+|  GPS: -35.3645, 149.1652                          |
 +--------------------------------------------------+
 |  [Start Mission]  [Resume]  [ABORT]               |
 +--------------------------------------------------+

@@ -639,3 +639,42 @@ def test_phase_rth():
     from dbvf_autonomy.mission_state_machine import get_mission_phase
     assert get_mission_phase(MissionState.TRANSIT_TO_H) == 'RTH'
     assert get_mission_phase(MissionState.LAND_H) == 'RTH'
+
+
+# ---------------------------------------------------------------------------
+# _get_altitude — rangefinder plausibility (BUG-001)
+# ---------------------------------------------------------------------------
+
+def test_get_altitude_valid_rangefinder():
+    """Valid rangefinder reading within max range should be used."""
+    sm = MissionStateMachine(_make_config(prefer_rangefinder=True, rangefinder_max_m=30.0))
+    vs = MockVehicleState(alt_rel=12.0, range_alt=10.5)
+    assert sm._get_altitude(vs) == 10.5
+
+
+def test_get_altitude_rangefinder_above_max_rejected():
+    """Rangefinder reading above max range should fall back to alt_rel (BUG-001)."""
+    sm = MissionStateMachine(_make_config(prefer_rangefinder=True, rangefinder_max_m=30.0))
+    vs = MockVehicleState(alt_rel=2.0, range_alt=60.0)
+    assert sm._get_altitude(vs) == 2.0
+
+
+def test_get_altitude_sentinel_rejected():
+    """Sentinel value -1.0 should still be rejected, falling back to alt_rel."""
+    sm = MissionStateMachine(_make_config(prefer_rangefinder=True, rangefinder_max_m=30.0))
+    vs = MockVehicleState(alt_rel=8.0, range_alt=-1.0)
+    assert sm._get_altitude(vs) == 8.0
+
+
+def test_get_altitude_at_max_range_accepted():
+    """Reading exactly at max range should still be accepted."""
+    sm = MissionStateMachine(_make_config(prefer_rangefinder=True, rangefinder_max_m=30.0))
+    vs = MockVehicleState(alt_rel=35.0, range_alt=30.0)
+    assert sm._get_altitude(vs) == 30.0
+
+
+def test_get_altitude_default_rangefinder_max():
+    """Default rangefinder_max_m should be 30.0 when not specified."""
+    sm = MissionStateMachine(_make_config(prefer_rangefinder=True))
+    vs = MockVehicleState(alt_rel=2.0, range_alt=60.0)
+    assert sm._get_altitude(vs) == 2.0

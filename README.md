@@ -259,13 +259,19 @@ On abort, the drone switches to LAND mode and lands in place.
 
 ## Configuration (mission_params.yaml)
 
+After changing any parameters in `src/dbvf_autonomy/config/mission_params.yaml`, you must rebuild and re-source for changes to take effect:
+```bash
+colcon build --packages-select dbvf_autonomy && source install/setup.bash
+```
+The YAML is installed to `install/dbvf_autonomy/share/` during build. The launch file reads from there, not from `src/`.
+
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `home_lat` / `home_lon` | -35.3632621 / 149.1652374 | Home position GPS |
-| `landing_lat` / `landing_lon` | -35.3640000 / 149.1652374 | Landing zone L GPS |
-| `wa_lat` / `wa_lon` | -35.3632531 / 149.1657896 | WA (AprilTag pad) GPS |
-| `f1_lat` / `f1_lon` | -35.3650000 / 149.1652374 | Drop zone F1 GPS |
-| `f2_lat` / `f2_lon` | -35.3660000 / 149.1652374 | Drop zone F2 GPS |
+| `landing_lat` / `landing_lon` | -35.3632621 / 149.1662471 | Landing zone L GPS |
+| `wa_lat` / `wa_lon` | -35.3633033 / 149.1657423 | WA (AprilTag pad) GPS |
+| `f1_lat` / `f1_lon` | -35.3632621 / 149.1665841 | Drop zone F1 GPS |
+| `f2_lat` / `f2_lon` | -35.3632621 / 149.1669210 | Drop zone F2 GPS |
 | `transit_altitude_ft` | 35.0 | Cruise altitude in feet |
 | `position_tolerance_m` | 3.0 | Lateral tolerance for waypoint arrival |
 | `takeoff_complete_alt_ft` | 33.0 | Altitude to consider takeoff complete |

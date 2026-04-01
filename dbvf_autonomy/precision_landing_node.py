@@ -75,16 +75,17 @@ class LandingState(Enum):
     ABORT_LAND = 'ABORT_LAND'
 
 
-def compute_preferred_tag_id(state, range_alt, slow_descent_altitude):
-    """Return the preferred tag ID (0=primary, 1=secondary) for adapter coordination."""
+def compute_preferred_tag_id(state, range_alt, slow_descent_altitude,
+                             primary_tag_id=1, secondary_tag_id=2):
+    """Return the preferred tag ID for adapter coordination."""
     if state in (LandingState.DESCEND_HOLD, LandingState.DESCEND_OFFSET,
                  LandingState.DESCEND_FINAL, LandingState.SMALL_TAG_SEARCH):
-        return 1
+        return secondary_tag_id
     if (state == LandingState.DESCEND_COARSE
             and range_alt >= 0.0
             and range_alt <= slow_descent_altitude):
-        return 1
-    return 0
+        return secondary_tag_id
+    return primary_tag_id
 
 
 class LandingStateMachine:
@@ -221,9 +222,11 @@ class LandingStateMachine:
         else:
             self.tag_lost_time = None
 
-        # Floor altitude — trigger small tag search
+        # Floor altitude — trigger small tag search only when ALL tags lost.
+        # If any tag (primary or secondary) is guiding descent, continue
+        # DESCEND_COARSE so the secondary can be confirmed naturally.
         if (vs.alt_rel <= self.config['descend_floor_altitude']
-                and not small_tag_detected):
+                and not tag_detected):
             self.state = LandingState.SMALL_TAG_SEARCH
             self.search_direction = 0
             self.search_phase = 'excursion'
@@ -389,7 +392,8 @@ class PrecisionLandingNode(Node):
         self.declare_parameter('servo_pid_i', 0.0)
         self.declare_parameter('servo_pid_d', 0.1)
         self.declare_parameter('servo_max_speed', 0.5)
-        self.declare_parameter('secondary_tag_id', 1)
+        self.declare_parameter('primary_tag_id', 1)
+        self.declare_parameter('secondary_tag_id', 2)
         self.declare_parameter('search_step_interval', 3.0)
         self.declare_parameter('search_step_amount', 0.5)
         self.declare_parameter('slow_descent_altitude', 2.0)
@@ -402,7 +406,7 @@ class PrecisionLandingNode(Node):
             'small_tag_confirm_time', 'hold_stabilize_time',
             'offset_forward', 'offset_right', 'offset_tolerance',
             'small_tag_search_radius', 'small_tag_search_speed',
-            'secondary_tag_id']}
+            'primary_tag_id', 'secondary_tag_id']}
 
         self.fsm = LandingStateMachine(config)
         self.approach_alt = config['approach_altitude']
@@ -586,7 +590,9 @@ class PrecisionLandingNode(Node):
         # Publish preferred tag ID for adapter coordination
         preferred = Int32()
         preferred.data = compute_preferred_tag_id(
-            state, vs.range_alt, self._slow_descent_altitude)
+            state, vs.range_alt, self._slow_descent_altitude,
+            primary_tag_id=self.fsm.config['primary_tag_id'],
+            secondary_tag_id=self.fsm.config['secondary_tag_id'])
         self.preferred_tag_pub.publish(preferred)
 
         # Publish current state

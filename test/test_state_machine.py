@@ -33,7 +33,8 @@ CONFIG = {
     'offset_tolerance': 0.05,
     'small_tag_search_radius': 0.5,
     'small_tag_search_speed': 0.2,
-    'secondary_tag_id': 1,
+    'primary_tag_id': 1,
+    'secondary_tag_id': 2,
 }
 
 # Target coordinates for all tests
@@ -57,7 +58,7 @@ def _to_search(sm):
 def _to_descend_coarse(sm):
     """Advance from IDLE to DESCEND_COARSE."""
     vs = _to_search(sm)
-    tag = MockTagStatus(detected=True, active_tag_id=0)
+    tag = MockTagStatus(detected=True, active_tag_id=1)
     for i in range(5):
         sm.update(vs, tag, 2.0 + i * 0.05)
     assert sm.state == LandingState.DESCEND_COARSE
@@ -110,7 +111,7 @@ def test_search_to_descend_coarse_with_confirmation():
     sm = LandingStateMachine(CONFIG)
     vs = _to_search(sm)
 
-    tag = MockTagStatus(detected=True, active_tag_id=0)
+    tag = MockTagStatus(detected=True, active_tag_id=1)
     for i in range(4):
         state, _ = sm.update(vs, tag, 2.0 + i * 0.05)
         assert state == LandingState.SEARCH  # Not confirmed yet
@@ -124,7 +125,7 @@ def test_search_resets_confirm_on_loss():
     sm = LandingStateMachine(CONFIG)
     vs = _to_search(sm)
 
-    tag = MockTagStatus(detected=True, active_tag_id=0)
+    tag = MockTagStatus(detected=True, active_tag_id=1)
     no_tag = MockTagStatus(detected=False)
 
     # 3 detections, then a loss, then 3 more — should NOT confirm
@@ -152,7 +153,7 @@ def test_descend_coarse_to_landed_on_disarm():
     _to_descend_coarse(sm)
 
     landed = MockVehicleState(lat=LAT, lon=LON, alt_rel=0.05, armed=False, vz=0.0)
-    tag = MockTagStatus(detected=True, active_tag_id=0)
+    tag = MockTagStatus(detected=True, active_tag_id=1)
     state, info = sm.update(landed, tag, 10.0)
     assert state == LandingState.LANDED
     assert info['action'] == 'landed'
@@ -179,7 +180,7 @@ def test_descend_coarse_tag_reacquired_resets_lost_timer():
     vs = _to_descend_coarse(sm)
 
     no_tag = MockTagStatus(detected=False)
-    tag = MockTagStatus(detected=True, active_tag_id=0)
+    tag = MockTagStatus(detected=True, active_tag_id=1)
     sm.update(vs, no_tag, 3.0)   # Lost at t=3.0
     sm.update(vs, no_tag, 5.0)   # Still lost at t=5.0 (2s < 4s)
     sm.update(vs, tag, 5.5)      # Reacquired — resets timer
@@ -220,7 +221,7 @@ def test_descend_coarse_to_hold():
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
-    small_tag = MockTagStatus(detected=True, active_tag_id=1)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
     # First detection starts the timer
     sm.update(vs, small_tag, 10.0)
     assert sm.state == LandingState.DESCEND_COARSE
@@ -235,14 +236,30 @@ def test_descend_coarse_to_hold():
     assert info['action'] == 'small_tag_confirmed'
 
 
-def test_descend_coarse_to_search_pattern():
-    """DESCEND_COARSE -> SMALL_TAG_SEARCH at descend_floor_altitude, no small tag."""
+def test_descend_coarse_floor_with_primary_continues():
+    """DESCEND_COARSE at floor altitude with primary tag visible stays in DESCEND_COARSE.
+
+    The primary tag is actively guiding PID descent — let it continue so
+    the secondary tag can be confirmed naturally as the drone gets closer.
+    """
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
     low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.5)
-    large_tag = MockTagStatus(detected=True, active_tag_id=0)
+    large_tag = MockTagStatus(detected=True, active_tag_id=1)
     state, info = sm.update(low_vs, large_tag, 10.0)
+    assert state == LandingState.DESCEND_COARSE
+    assert info['action'] == 'descending'
+
+
+def test_descend_coarse_floor_no_tag_triggers_search():
+    """DESCEND_COARSE -> SMALL_TAG_SEARCH at floor altitude when NO tag visible."""
+    sm = LandingStateMachine(CONFIG)
+    vs = _to_descend_coarse(sm)
+
+    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.5)
+    no_tag = MockTagStatus(detected=False)
+    state, info = sm.update(low_vs, no_tag, 10.0)
     assert state == LandingState.SMALL_TAG_SEARCH
     assert info['action'] == 'floor_altitude'
 
@@ -265,7 +282,7 @@ def test_descend_hold_to_offset():
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
-    small_tag = MockTagStatus(detected=True, active_tag_id=1)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
     # Get to DESCEND_HOLD
     sm.update(vs, small_tag, 10.0)
     sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
@@ -290,7 +307,7 @@ def test_descend_offset_to_final():
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
-    small_tag = MockTagStatus(detected=True, active_tag_id=1)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(vs, small_tag, 10.0)
     sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
     sm.update(vs, small_tag, 13.2)  # -> DESCEND_OFFSET
@@ -307,7 +324,7 @@ def test_descend_offset_tag_lost():
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
-    small_tag = MockTagStatus(detected=True, active_tag_id=1)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(vs, small_tag, 10.0)
     sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
     sm.update(vs, small_tag, 13.2)  # -> DESCEND_OFFSET
@@ -326,7 +343,7 @@ def test_descend_final_to_landed():
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
-    small_tag = MockTagStatus(detected=True, active_tag_id=1)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(vs, small_tag, 10.0)
     sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
     sm.update(vs, small_tag, 13.2)  # -> DESCEND_OFFSET
@@ -344,14 +361,14 @@ def test_search_pattern_finds_tag():
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
-    # Trigger search pattern at floor altitude
+    # Trigger search pattern at floor altitude with no tag visible
     low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.5)
-    large_tag = MockTagStatus(detected=True, active_tag_id=0)
-    sm.update(low_vs, large_tag, 10.0)  # -> SMALL_TAG_SEARCH
+    no_tag = MockTagStatus(detected=False)
+    sm.update(low_vs, no_tag, 10.0)  # -> SMALL_TAG_SEARCH
     assert sm.state == LandingState.SMALL_TAG_SEARCH
 
     # Small tag appears during search
-    small_tag = MockTagStatus(detected=True, active_tag_id=1)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
     state, info = sm.update(low_vs, small_tag, 11.0)
     assert state == LandingState.DESCEND_HOLD
     assert info['action'] == 'small_tag_found'
@@ -363,11 +380,11 @@ def test_search_pattern_gives_up():
     vs = _to_descend_coarse(sm)
 
     low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.5)
-    large_tag = MockTagStatus(detected=True, active_tag_id=0)
-    sm.update(low_vs, large_tag, 10.0)  # -> SMALL_TAG_SEARCH
+    no_tag = MockTagStatus(detected=False)
+    sm.update(low_vs, no_tag, 10.0)  # -> SMALL_TAG_SEARCH
     assert sm.state == LandingState.SMALL_TAG_SEARCH
 
-    no_small = MockTagStatus(detected=True, active_tag_id=0)
+    no_small = MockTagStatus(detected=True, active_tag_id=1)
     # Each direction: excursion (0.5/0.2 = 2.5s) + return (2.5s) = 5s
     # 4 directions = 20s total
     t = 10.0
@@ -395,7 +412,7 @@ def test_global_timeout_from_descend_coarse():
     _to_descend_coarse(sm)
 
     vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=5.0)
-    tag = MockTagStatus(detected=True, active_tag_id=0)
+    tag = MockTagStatus(detected=True, active_tag_id=1)
     state, info = sm.update(vs, tag, 62.0)  # start_time was ~1.0, so 62-1=61 > 60
     assert state == LandingState.ABORT_LAND
     assert info['action'] == 'timeout'
@@ -406,7 +423,7 @@ def test_global_timeout_from_descend_offset():
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
-    small_tag = MockTagStatus(detected=True, active_tag_id=1)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(vs, small_tag, 10.0)
     sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
     sm.update(vs, small_tag, 13.2)  # -> DESCEND_OFFSET
@@ -422,14 +439,14 @@ def test_global_timeout_from_descend_offset():
 # ---------------------------------------------------------------------------
 
 class MockTarget:
-    def __init__(self, tag_id=0, position_x=0.1, position_y=0.1, position_valid=True):
+    def __init__(self, tag_id=1, position_x=0.1, position_y=0.1, position_valid=True):
         self.tag_id = tag_id
         self.position_x = position_x
         self.position_y = position_y
         self.position_valid = position_valid
 
 
-def _apply_tag_guard(state, target, secondary_tag_id=1):
+def _apply_tag_guard(state, target, secondary_tag_id=2):
     """Replicates the tag ID guard logic from _velocity_servo."""
     expected_secondary = (state in (LandingState.DESCEND_HOLD,
                                     LandingState.DESCEND_OFFSET,
@@ -441,15 +458,15 @@ def _apply_tag_guard(state, target, secondary_tag_id=1):
 
 
 def test_velocity_servo_rejects_wrong_tag_in_hold():
-    """DESCEND_HOLD with target.tag_id=0 -> target treated as None (hold position)."""
-    target = MockTarget(tag_id=0)
+    """DESCEND_HOLD with target.tag_id=1 (primary) -> target treated as None (hold position)."""
+    target = MockTarget(tag_id=1)
     result = _apply_tag_guard(LandingState.DESCEND_HOLD, target)
     assert result is None
 
 
 def test_velocity_servo_accepts_correct_tag_in_hold():
-    """DESCEND_HOLD with target.tag_id=1 -> normal PID output."""
-    target = MockTarget(tag_id=1)
+    """DESCEND_HOLD with target.tag_id=2 (secondary) -> normal PID output."""
+    target = MockTarget(tag_id=2)
     result = _apply_tag_guard(LandingState.DESCEND_HOLD, target)
     assert result is target
 
@@ -465,18 +482,18 @@ def _compute_preferred_tag(state, range_alt, slow_descent_altitude):
 
 
 def test_preferred_tag_secondary_during_late_descend_coarse():
-    """DESCEND_COARSE with range_alt=1.8 (below 2.0m threshold) → preferred=1."""
+    """DESCEND_COARSE with range_alt=1.8 (below 2.0m threshold) → preferred=2 (secondary)."""
     result = _compute_preferred_tag(LandingState.DESCEND_COARSE, 1.8, 2.0)
-    assert result == 1
+    assert result == 2
 
 
 def test_preferred_tag_primary_during_early_descend_coarse():
-    """DESCEND_COARSE with range_alt=3.0 (above 2.0m threshold) → preferred=0."""
+    """DESCEND_COARSE with range_alt=3.0 (above 2.0m threshold) → preferred=1 (primary)."""
     result = _compute_preferred_tag(LandingState.DESCEND_COARSE, 3.0, 2.0)
-    assert result == 0
+    assert result == 1
 
 
 def test_preferred_tag_primary_when_range_alt_invalid():
-    """DESCEND_COARSE with range_alt=-1.0 (invalid) → preferred=0."""
+    """DESCEND_COARSE with range_alt=-1.0 (invalid) → preferred=1 (primary)."""
     result = _compute_preferred_tag(LandingState.DESCEND_COARSE, -1.0, 2.0)
-    assert result == 0
+    assert result == 1

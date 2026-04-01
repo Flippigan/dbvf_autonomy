@@ -29,7 +29,7 @@ Never `from dbvf_autonomy.msg import ...` — that path does not exist.
 
 ### tag_detector_adapter_node
 - Bridges apriltag_ros detections to custom LandingTargetPose messages
-- Dual-tag switching: primary (ID 0, 0.6m) and secondary (ID 1, 0.15m)
+- Dual-tag switching: primary (ID 1, 0.15m) and secondary (ID 2, 0.10m)
 - `select_best_tag()`: preferred (if detected) > primary > secondary > None
 - DebounceFilter: rolling buffer (30 frames), 80% threshold to switch; immediate bypass when candidate matches preferred tag
 - Subscribes: `/dbvf/cmd/preferred_tag_id` (Int32) for FSM-driven tag coordination
@@ -47,11 +47,20 @@ Never `from dbvf_autonomy.msg import ...` — that path does not exist.
 - Tag lost timeout (4s) → back to SEARCH; global timeout (60s) → ABORT_LAND
 - Triggered via `/dbvf/start_precision_landing` service
 
+### arduino_interface_node
+- Serial interface to Arduino servo controller via pyserial
+- Exposes `/dbvf/arduino/set_servo` service (DoSetServo)
+- Serial protocol: `S<servo_number>:<pwm>\n` → `OK\n` or `ERR:<msg>\n`
+- Gracefully returns `success=False` if serial port unavailable (no crash)
+- Lazy reconnect on each service call if serial is `None`
+- Config: `serial_port` (/dev/ttyACM0), `baud_rate` (115200), `serial_timeout_s` (1.0)
+- Pure functions `format_servo_command()` and `parse_servo_response()` are testable without ROS2
+
 ### mission_sequencer_node
-- 17-state linear FSM: IDLE → PREFLIGHT_CHECK → TAKEOFF_H → TRANSIT_H_TO_L → LAND_L → WAIT_FLAGGER → TAKEOFF_L → TRANSIT_TO_DROP → DROP_PAYLOAD → TRANSIT_TO_WA → LAND_WA → TAKEOFF_WA → TRANSIT_TO_DROP_2 → DROP_PAYLOAD_2 → TRANSIT_TO_H → LAND_H → COMPLETE (+ ABORT)
-- Orchestrates full DBVF competition: FM-1, FM-2, FM-3, RTH
+- 20-state linear FSM: IDLE → PREFLIGHT_CHECK → TAKEOFF_H → TRANSIT_H_TO_L → LAND_L → WAIT_FLAGGER → TAKEOFF_L → TRANSIT_TO_DROP → DROP_PAYLOAD → TRANSIT_TO_WA → LAND_WA_DESCEND → WA_DROP_OLD_PAYLOAD → WA_SERVO_RESET → LAND_WA_FINAL → TAKEOFF_WA → TRANSIT_TO_DROP_2 → DROP_PAYLOAD_2 → TRANSIT_TO_H → LAND_H → COMPLETE (+ ABORT)
+- Orchestrates full DBVF competition: FM-1, FM-2, FM-3 (with 4-state WA reload), RTH
 - Pure Python state machine (`mission_state_machine.py`) wrapped by ROS2 node
-- Delegates to: `set_mode`, `arm_motors`, `takeoff`, `send_guided_position`, `start_precision_landing`, `do_set_servo`
+- Delegates to: `set_mode`, `arm_motors`, `takeoff`, `send_guided_position`, `start_precision_landing`, `do_set_servo`, `arduino/set_servo`
 - Publishes: `/dbvf/mission_state` (10Hz), `/dbvf/mission_phase` (on change)
 - Services: `/dbvf/start_mission`, `/dbvf/resume_mission`, `/dbvf/abort_mission`
 - Config: `config/mission_params.yaml` — GPS waypoints, flight params, servo config, safety timeouts
@@ -59,7 +68,7 @@ Never `from dbvf_autonomy.msg import ...` — that path does not exist.
 
 ### mission_helpers.py (not a node)
 - Pure functions: `ft_to_m`, `m_to_ft`, `haversine_distance_m`, `is_within_tolerance`
-- Config validation: `validate_mission_config`, `DEFAULT_MISSION_CONFIG`
+- Config validation: `validate_mission_config`, `DEFAULT_MISSION_CONFIG` (includes pickup servo params)
 - No ROS2 dependencies — fully unit-testable
 
 ## Testing
@@ -70,7 +79,7 @@ colcon test --packages-select dbvf_autonomy
 colcon test-result --verbose
 ```
 
-151 tests across 12 files:
+167 tests across 14 files:
 - `test_mavlink_messages.py` — mode map, landing target params
 - `test_debounce_filter.py` — rolling buffer debounce logic
 - `test_angle_computation.py` — pixel-to-angle atan2 conversion
@@ -81,8 +90,10 @@ colcon test-result --verbose
 - `test_tag_pose_estimation.py` — tag pose estimation
 - `test_descent_rate_clamp.py` — descent rate clamping
 - `test_mission_helpers.py` — ft/m conversion, haversine, tolerance
-- `test_mission_config.py` — config validation, defaults
-- `test_mission_state_machine.py` — all 17 mission states + ABORT transitions
+- `test_mission_config.py` — config validation, defaults, pickup params
+- `test_mission_state_machine.py` — all 20 mission states + ABORT transitions, 4-state WA reload
+- `test_rc_trigger.py` — RC channel rising-edge detection
+- `test_arduino_interface.py` — serial protocol pure functions (format_servo_command, parse_servo_response)
 
 Tests are pure-Python (no ROS2 runtime needed) but require ROS2 environment sourced for imports.
 
@@ -98,6 +109,7 @@ colcon build --packages-select dbvf_msgs dbvf_autonomy
 - Mission sequencer spec: `docs/superpowers/specs/2026-03-29-mission-sequencer-design.md`
 - Mission sequencer plan: `docs/superpowers/plans/2026-03-29-mission-sequencer.md`
 - RC mission control plan: `docs/superpowers/plans/2026-03-30-rc-mission-control.md`
+- WA reload mechanism plan: `docs/superpowers/plans/2026-03-30-wa-reload-mechanism.md`
 - Bug log: `docs/superpowers/Log/`
 
 ## Team Integration Docs

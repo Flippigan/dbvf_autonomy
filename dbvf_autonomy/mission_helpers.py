@@ -97,6 +97,7 @@ DEFAULT_MISSION_CONFIG = {
 
     # Altitude source
     'prefer_rangefinder': True,
+    'rangefinder_max_m': 30.0,
 }
 
 

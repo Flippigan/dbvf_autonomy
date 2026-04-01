@@ -136,10 +136,10 @@ class TagDetectorAdapterNode(Node):
     def __init__(self):
         super().__init__('tag_detector_adapter')
 
-        self.declare_parameter('primary_tag_id', 0)
-        self.declare_parameter('secondary_tag_id', 1)
-        self.declare_parameter('primary_tag_size', 0.6)
-        self.declare_parameter('secondary_tag_size', 0.15)
+        self.declare_parameter('primary_tag_id', 1)
+        self.declare_parameter('secondary_tag_id', 2)
+        self.declare_parameter('primary_tag_size', 0.15)
+        self.declare_parameter('secondary_tag_size', 0.05)
         self.declare_parameter('debounce_buffer_size', 30)
         self.declare_parameter('debounce_threshold', 0.8)
         self.declare_parameter('detection_topic', '/apriltag/detections')
@@ -201,6 +201,15 @@ class TagDetectorAdapterNode(Node):
             detections_by_id, self.primary_id, self.secondary_id,
             self.preferred_tag_id)
         active_id = self.debounce.update(candidate_id, preferred_id=self.preferred_tag_id)
+
+        # Immediate fallback: if debounced active tag is gone from the frame
+        # but another known tag IS visible, switch immediately — there is
+        # nothing to debounce when only one tag is present.
+        if (active_id not in detections_by_id
+                and candidate_id is not None
+                and candidate_id in detections_by_id):
+            self.debounce.active_id = candidate_id
+            active_id = candidate_id
 
         status = TagStatus()
         status.header = msg.header

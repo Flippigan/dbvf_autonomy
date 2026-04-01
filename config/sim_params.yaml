@@ -11,7 +11,7 @@ tag_detector_adapter:
     primary_tag_id: 1
     secondary_tag_id: 2
     primary_tag_size: 0.15
-    secondary_tag_size: 0.10
+    secondary_tag_size: 0.05
     debounce_buffer_size: 30
     debounce_threshold: 0.8
     detection_topic: "/apriltag/detections"

@@ -26,8 +26,8 @@ def _build_homography(tx, ty, tz, fx, fy, cx, cy, tag_size):
 
 def test_tag_centered_below():
     """Tag at (0, 0, 5) should return position (0, 0, 5)."""
-    h = _build_homography(0.0, 0.0, 5.0, FX, FY, CX, CY, 0.6)
-    x, y, z = estimate_tag_position(h, FX, FY, CX, CY, 0.6)
+    h = _build_homography(0.0, 0.0, 5.0, FX, FY, CX, CY, 0.15)
+    x, y, z = estimate_tag_position(h, FX, FY, CX, CY, 0.15)
     assert abs(x) < 1e-6
     assert abs(y) < 1e-6
     assert abs(z - 5.0) < 1e-6
@@ -35,8 +35,8 @@ def test_tag_centered_below():
 
 def test_tag_offset():
     """Tag at (1.0, 0.5, 5.0) should return that position."""
-    h = _build_homography(1.0, 0.5, 5.0, FX, FY, CX, CY, 0.6)
-    x, y, z = estimate_tag_position(h, FX, FY, CX, CY, 0.6)
+    h = _build_homography(1.0, 0.5, 5.0, FX, FY, CX, CY, 0.15)
+    x, y, z = estimate_tag_position(h, FX, FY, CX, CY, 0.15)
     assert abs(x - 1.0) < 1e-6
     assert abs(y - 0.5) < 1e-6
     assert abs(z - 5.0) < 1e-6
@@ -44,17 +44,17 @@ def test_tag_offset():
 
 def test_close_range():
     """Tag at (0, 0, 1.5) — close range typical of final descent."""
-    h = _build_homography(0.0, 0.0, 1.5, FX, FY, CX, CY, 0.6)
-    x, y, z = estimate_tag_position(h, FX, FY, CX, CY, 0.6)
+    h = _build_homography(0.0, 0.0, 1.5, FX, FY, CX, CY, 0.15)
+    x, y, z = estimate_tag_position(h, FX, FY, CX, CY, 0.15)
     assert abs(x) < 1e-6
     assert abs(y) < 1e-6
     assert abs(z - 1.5) < 1e-6
 
 
 def test_secondary_tag_size():
-    """Works correctly with the smaller secondary tag (0.15m)."""
-    h = _build_homography(0.2, -0.1, 2.0, FX, FY, CX, CY, 0.15)
-    x, y, z = estimate_tag_position(h, FX, FY, CX, CY, 0.15)
+    """Works correctly with the smaller secondary tag (0.05m)."""
+    h = _build_homography(0.2, -0.1, 2.0, FX, FY, CX, CY, 0.05)
+    x, y, z = estimate_tag_position(h, FX, FY, CX, CY, 0.05)
     assert abs(x - 0.2) < 1e-6
     assert abs(y - (-0.1)) < 1e-6
     assert abs(z - 2.0) < 1e-6
@@ -62,10 +62,10 @@ def test_secondary_tag_size():
 
 def test_homography_scale_invariance():
     """Result should be the same regardless of homography scaling."""
-    h_norm = _build_homography(0.5, 0.3, 4.0, FX, FY, CX, CY, 0.6)
+    h_norm = _build_homography(0.5, 0.3, 4.0, FX, FY, CX, CY, 0.15)
     h_scaled = [v * 7.0 for v in h_norm]
-    x1, y1, z1 = estimate_tag_position(h_norm, FX, FY, CX, CY, 0.6)
-    x2, y2, z2 = estimate_tag_position(h_scaled, FX, FY, CX, CY, 0.6)
+    x1, y1, z1 = estimate_tag_position(h_norm, FX, FY, CX, CY, 0.15)
+    x2, y2, z2 = estimate_tag_position(h_scaled, FX, FY, CX, CY, 0.15)
     assert abs(x1 - x2) < 1e-6
     assert abs(y1 - y2) < 1e-6
     assert abs(z1 - z2) < 1e-6
