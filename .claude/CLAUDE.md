@@ -31,7 +31,7 @@ Never `from dbvf_autonomy.msg import ...` — that path does not exist.
 - Bridges apriltag_ros detections to custom LandingTargetPose messages
 - Dual-tag switching: primary (ID 1, 0.15m) and secondary (ID 2, 0.10m)
 - `select_best_tag()`: preferred (if detected) > primary > secondary > None
-- DebounceFilter: rolling buffer (30 frames), 80% threshold to switch; immediate bypass when candidate matches preferred tag
+- DebounceFilter: rolling buffer (30 frames), 80% threshold to switch; immediate bypass when candidate matches preferred tag; immediate fallback when debounced active tag leaves camera FOV (prevents false `detected=False` during tag transitions)
 - Subscribes: `/dbvf/cmd/preferred_tag_id` (Int32) for FSM-driven tag coordination
 - Computes angle_x/angle_y from camera intrinsics (CameraInfo K matrix)
 - Publishes: `/dbvf/landing_target_pose`, `/dbvf/tag_status`
@@ -40,7 +40,7 @@ Never `from dbvf_autonomy.msg import ...` — that path does not exist.
 - State machine: IDLE → APPROACH → SEARCH → DESCEND_COARSE → DESCEND_HOLD → DESCEND_OFFSET → DESCEND_FINAL → LANDED (+ SMALL_TAG_SEARCH, ABORT_LAND)
 - APPROACH: GUIDED mode, fly to target GPS coords
 - SEARCH: Slow guided descent (0.3 m/s), wait for tag confirmation (5 consecutive frames)
-- DESCEND_COARSE: PID visual servo on primary tag; publishes preferred_id=1 when range_alt ≤ slow_descent_altitude (2.0m)
+- DESCEND_COARSE: PID visual servo on primary tag; publishes preferred_id=2 when range_alt ≤ slow_descent_altitude (2.0m); floor altitude check only triggers SMALL_TAG_SEARCH when ALL tags lost (not just secondary missing)
 - DESCEND_HOLD/OFFSET/FINAL: PID visual servo on secondary tag with safety guard rejecting primary tag data
 - `compute_preferred_tag_id()`: pure function for preferred tag logic
 - Publishes: `/dbvf/cmd/preferred_tag_id` (Int32, 20Hz) for adapter coordination
@@ -79,9 +79,9 @@ colcon test --packages-select dbvf_autonomy
 colcon test-result --verbose
 ```
 
-167 tests across 14 files:
+190 tests across 14 files:
 - `test_mavlink_messages.py` — mode map, landing target params
-- `test_debounce_filter.py` — rolling buffer debounce logic
+- `test_debounce_filter.py` — rolling buffer debounce logic, adapter fallback when active tag disappears
 - `test_angle_computation.py` — pixel-to-angle atan2 conversion
 - `test_tag_selection.py` — primary/secondary tag priority
 - `test_state_machine.py` — precision landing FSM transitions
