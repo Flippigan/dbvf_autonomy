@@ -47,7 +47,7 @@ def generate_launch_description():
             package='dbvf_autonomy',
             executable='mavlink_interface_node',
             name='mavlink_interface',
-            parameters=[sim_config],
+            parameters=[sim_config, mission_config],
         ),
 
         # Precision landing state machine
