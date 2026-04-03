@@ -1,6 +1,17 @@
+# Hardware parameters for Jetson Orin Nano + Cube Orange.
+# Loaded by mission_real.launch.py / precision_landing_real.launch.py.
+# Self-contained: includes all parameters that sim_params.yaml provides.
+
 mavlink_interface:
   ros__parameters:
-    connection_string: "udpin:0.0.0.0:14551"
+    # MAVLink connection
+    connection_type: "serial"           # "serial", "tcp", or "udp"
+    serial_device: "/dev/ttyTHS1"
+    serial_baud: 921600
+    tcp_host: "127.0.0.1"
+    tcp_port: 5762
+    udp_host: "127.0.0.1"
+    udp_port: 14550
     source_system: 255
     source_component: 0
     heartbeat_rate: 1.0
@@ -21,7 +32,6 @@ tag_detector_adapter:
 
 precision_landing:
   ros__parameters:
-    # Existing
     approach_altitude: 8.0
     min_search_altitude: 1.0
     search_descent_rate: 0.3
@@ -29,42 +39,41 @@ precision_landing:
     tag_confirm_frames: 5
     tag_lost_timeout: 4.0
     landing_timeout: 60.0
-
-    # Descent phases
     descend_floor_altitude: 1.5
     final_descent_rate: 0.15
-
-    # Small tag detection
     small_tag_confirm_time: 2.0
     secondary_tag_id: 2
-
-    # Offset tolerance (offsets are now per-landing via service request)
+    offset_forward: 0.0
+    offset_right: 0.0
     offset_tolerance: 0.05
-
-    # Small tag search pattern
     small_tag_search_radius: 0.5
     small_tag_search_speed: 0.2
-
-    # Slow descent near ground (ISS-011)
-    slow_descent_altitude: 2.0   # Rangefinder threshold (meters AGL)
-    slow_descent_rate: 0.1       # Max descent rate below threshold (m/s)
-
-    # Visual servo PID
+    slow_descent_altitude: 2.0
+    slow_descent_rate: 0.1
     servo_pid_p: 0.5
     servo_pid_i: 0.0
     servo_pid_d: 0.1
     servo_max_speed: 0.5
 
     # 4-phase final approach (ISS-013)
-    hold_position_tolerance: 0.10   # metres — max lateral error for "stable"
-    hold_stabilize_time: 0.5        # seconds — hold stable before ALIGN_YAW
-    yaw_alignment_tolerance: 0.087  # radians (~5 deg) — max yaw error for "aligned"
-    yaw_alignment_hold_time: 0.5    # seconds — hold aligned before OFFSET_LATERAL
-    yaw_kp: 0.5                     # P gain for yaw controller
-    max_yaw_rate: 0.35              # rad/s (~20 deg/s) — max rotation rate
+    hold_position_tolerance: 0.10
+    hold_stabilize_time: 0.5
+    yaw_alignment_tolerance: 0.087
+    yaw_alignment_hold_time: 0.5
+    yaw_kp: 0.5
+    max_yaw_rate: 0.35
 
 arduino_interface:
   ros__parameters:
     serial_port: "/dev/ttyACM0"
     baud_rate: 115200
     serial_timeout_s: 1.0
+
+camera:
+  ros__parameters:
+    type: "csi"
+    sensor_id: 0
+    width: 1280
+    height: 720
+    framerate: 30
+    camera_info_url: "file:///home/finn/ardu_ws/src/dbvf_autonomy/config/imx219_calibration.yaml"

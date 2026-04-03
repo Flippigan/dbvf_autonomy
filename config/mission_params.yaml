@@ -52,6 +52,11 @@ mission_sequencer:
     pickup_servo_pwm_pickup: 1500
     pickup_settle_time_s: 2.0
 
+    # ── WA Precision Landing Offset (camera-to-mechanism) ─────────
+    wa_offset_forward: 0.0    # metres, positive = mechanism behind camera
+    wa_offset_right: -1.0      # metres, positive = mechanism right of camera
+    wa_target_yaw: 0.0        # radians, relative to tag orientation (0.0 = aligned with tag top)
+
     # ── Drop Zone Target ──────────────────────────────────────────
     # "F1" (7x7ft, +2.5pts) or "F2" (3x3ft, +5pts)
     drop_target: "F1"

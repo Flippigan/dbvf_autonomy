@@ -49,6 +49,8 @@ class MissionSequencerNode(Node):
             'guided_resend_interval_s': 1.0,
             'prefer_rangefinder': True,
             'rangefinder_max_m': 30.0,
+            'wa_offset_forward': 0.0,
+            'wa_offset_right': 0.0,
         }
         for name, default in param_defaults.items():
             self.declare_parameter(name, default)
@@ -237,7 +239,11 @@ class MissionSequencerNode(Node):
         elif action == 'send_guided_position_wa_alt':
             self._call_guided_position(cfg['wa_lat'], cfg['wa_lon'], alt)
         elif action == 'start_precision_landing':
-            self._call_start_precision_landing(cfg['wa_lat'], cfg['wa_lon'])
+            self._call_start_precision_landing(
+                cfg['wa_lat'], cfg['wa_lon'],
+                cfg.get('wa_offset_forward', 0.0),
+                cfg.get('wa_offset_right', 0.0),
+                cfg.get('wa_target_yaw', 0.0))
         elif action == 'servo_release':
             self._call_set_servo(
                 cfg['drop_servo_number'], cfg['drop_servo_pwm_release'])
@@ -290,13 +296,18 @@ class MissionSequencerNode(Node):
         req.alt = alt
         self.guided_cli.call_async(req)
 
-    def _call_start_precision_landing(self, lat, lon):
+    def _call_start_precision_landing(self, lat, lon,
+                                      offset_forward=0.0, offset_right=0.0,
+                                      target_yaw=0.0):
         if not self.precision_land_cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().error('start_precision_landing service unavailable')
             return
         req = StartPrecisionLanding.Request()
         req.target_lat = lat
         req.target_lon = lon
+        req.offset_forward = offset_forward
+        req.offset_right = offset_right
+        req.target_yaw = target_yaw
         future = self.precision_land_cli.call_async(req)
         future.add_done_callback(lambda f: self.get_logger().info(
             f'Precision landing: {f.result().message}') if f.result() else None)
