@@ -239,8 +239,8 @@ def test_global_timeout():
 # New transition tests for expanded FSM
 # ---------------------------------------------------------------------------
 
-def test_descend_coarse_to_offset():
-    """DESCEND_COARSE -> OFFSET_LATERAL when small tag confirmed AND below slow_descent_altitude."""
+def test_descend_coarse_to_hold_above_tag():
+    """DESCEND_COARSE -> HOLD_ABOVE_TAG when small tag detected for small_tag_confirm_time."""
     sm = LandingStateMachine(CONFIG)
     _to_descend_coarse(sm)
 
@@ -254,9 +254,9 @@ def test_descend_coarse_to_offset():
     sm.update(low_vs, small_tag, 11.0)
     assert sm.state == LandingState.DESCEND_COARSE
 
-    # 2.0 seconds of continuous detection at low altitude → transition
+    # 2.0 seconds of continuous detection → transition
     state, info = sm.update(low_vs, small_tag, 12.1)
-    assert state == LandingState.OFFSET_LATERAL
+    assert state == LandingState.HOLD_ABOVE_TAG
     assert info['action'] == 'small_tag_confirmed'
 
 
@@ -322,16 +322,12 @@ def test_offset_lateral_to_final():
     to signal the node to check. We test the FSM returns the correct info.
     """
     sm = LandingStateMachine(CONFIG)
-    _to_descend_coarse(sm)
+    vs = _to_descend_coarse(sm)
+    sm.state = LandingState.OFFSET_LATERAL
 
-    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    sm.update(low_vs, small_tag, 10.0)
-    sm.update(low_vs, small_tag, 12.1)  # -> OFFSET_LATERAL
-    assert sm.state == LandingState.OFFSET_LATERAL
-
     # FSM returns use_offset=True — the node handles the actual transition
-    state, info = sm.update(low_vs, small_tag, 14.0)
+    state, info = sm.update(vs, small_tag, 14.0)
     assert state == LandingState.OFFSET_LATERAL
     assert info.get('use_offset') is True
 
@@ -339,18 +335,13 @@ def test_offset_lateral_to_final():
 def test_offset_lateral_tag_lost():
     """OFFSET_LATERAL -> SEARCH when small tag lost for tag_lost_timeout."""
     sm = LandingStateMachine(CONFIG)
-    _to_descend_coarse(sm)
-
-    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
-    small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    sm.update(low_vs, small_tag, 10.0)
-    sm.update(low_vs, small_tag, 12.1)  # -> OFFSET_LATERAL
-    assert sm.state == LandingState.OFFSET_LATERAL
+    vs = _to_descend_coarse(sm)
+    sm.state = LandingState.OFFSET_LATERAL
 
     no_tag = MockTagStatus(detected=False)
-    sm.update(low_vs, no_tag, 14.0)  # Start lost timer
-    sm.update(low_vs, no_tag, 16.0)  # 2s < 4s
-    state, info = sm.update(low_vs, no_tag, 18.1)  # 4.1s > 4s
+    sm.update(vs, no_tag, 14.0)  # Start lost timer
+    sm.update(vs, no_tag, 16.0)  # 2s < 4s
+    state, info = sm.update(vs, no_tag, 18.1)  # 4.1s > 4s
     assert state == LandingState.SEARCH
     assert info['action'] == 'tag_lost'
 
@@ -489,14 +480,9 @@ def test_descend_final_to_landed():
     """DESCEND_FINAL -> LANDED on landing detection."""
     sm = LandingStateMachine(CONFIG)
     _to_descend_coarse(sm)
-
-    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
-    small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    sm.update(low_vs, small_tag, 10.0)
-    sm.update(low_vs, small_tag, 12.1)  # -> OFFSET_LATERAL
-    # Simulate offset achieved by setting state directly (as node would)
     sm.state = LandingState.DESCEND_FINAL
 
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
     landed = MockVehicleState(lat=LAT, lon=LON, alt_rel=0.05, armed=False, vz=0.0)
     state, info = sm.update(landed, small_tag, 20.0)
     assert state == LandingState.LANDED
@@ -504,7 +490,7 @@ def test_descend_final_to_landed():
 
 
 def test_search_pattern_finds_tag():
-    """SMALL_TAG_SEARCH -> OFFSET_LATERAL when small tag detected during search."""
+    """SMALL_TAG_SEARCH -> HOLD_ABOVE_TAG when small tag detected during search."""
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
@@ -517,7 +503,7 @@ def test_search_pattern_finds_tag():
     # Small tag appears during search
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     state, info = sm.update(low_vs, small_tag, 11.0)
-    assert state == LandingState.OFFSET_LATERAL
+    assert state == LandingState.HOLD_ABOVE_TAG
     assert info['action'] == 'small_tag_found'
 
 
@@ -568,15 +554,11 @@ def test_global_timeout_from_descend_coarse():
 def test_global_timeout_from_offset_lateral():
     """OFFSET_LATERAL -> ABORT_LAND on landing_timeout."""
     sm = LandingStateMachine(CONFIG)
-    _to_descend_coarse(sm)
+    vs = _to_descend_coarse(sm)
+    sm.state = LandingState.OFFSET_LATERAL
 
-    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    sm.update(low_vs, small_tag, 10.0)
-    sm.update(low_vs, small_tag, 12.1)  # -> OFFSET_LATERAL
-    assert sm.state == LandingState.OFFSET_LATERAL
-
-    state, info = sm.update(low_vs, small_tag, 62.0)  # timeout
+    state, info = sm.update(vs, small_tag, 62.0)  # timeout
     assert state == LandingState.ABORT_LAND
     assert info['action'] == 'timeout'
 

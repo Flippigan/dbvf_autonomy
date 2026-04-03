@@ -214,7 +214,7 @@ class LandingStateMachine:
             elif (current_time - self.small_tag_first_seen
                   >= self.config['small_tag_confirm_time']
                   and vs.alt_rel <= self.config.get('slow_descent_altitude', 2.0)):
-                self.state = LandingState.OFFSET_LATERAL
+                self.state = LandingState.HOLD_ABOVE_TAG
                 self.small_tag_first_seen = None
                 return self.state, {'action': 'small_tag_confirmed'}
         else:
@@ -350,7 +350,7 @@ class LandingStateMachine:
                               and tag_status.active_tag_id == self.config.get('secondary_tag_id', 1))
 
         if small_tag_detected:
-            self.state = LandingState.OFFSET_LATERAL
+            self.state = LandingState.HOLD_ABOVE_TAG
             return self.state, {'action': 'small_tag_found'}
 
         radius = self.config['small_tag_search_radius']
