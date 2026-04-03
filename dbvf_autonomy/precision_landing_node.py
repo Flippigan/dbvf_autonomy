@@ -33,6 +33,11 @@ def clamp_descent_rate(vz, range_alt, slow_descent_altitude, slow_descent_rate):
     return vz
 
 
+def wrap_angle(angle):
+    """Wrap angle to [-pi, pi]."""
+    return (angle + math.pi) % (2 * math.pi) - math.pi
+
+
 class PIDController:
     def __init__(self, kp, ki, kd, output_limit):
         self.kp = kp
@@ -190,12 +195,18 @@ class LandingStateMachine:
         small_tag_detected = (tag_detected
                               and tag_status.active_tag_id == self.config.get('secondary_tag_id', 1))
 
-        # Track small tag continuous detection
+        # Track small tag continuous detection.
+        # Only transition to DESCEND_OFFSET when BOTH conditions are met:
+        #   1. Small tag confirmed for small_tag_confirm_time
+        #   2. Drone is at or below slow_descent_altitude (fine-positioning altitude)
+        # This keeps the drone descending during the initial approach and only
+        # pauses for fine positioning near the ground (ISS-016).
         if small_tag_detected:
             if self.small_tag_first_seen is None:
                 self.small_tag_first_seen = current_time
             elif (current_time - self.small_tag_first_seen
-                  >= self.config['small_tag_confirm_time']):
+                  >= self.config['small_tag_confirm_time']
+                  and vs.alt_rel <= self.config.get('slow_descent_altitude', 2.0)):
                 self.state = LandingState.DESCEND_OFFSET
                 self.small_tag_first_seen = None
                 return self.state, {'action': 'small_tag_confirmed'}
@@ -380,7 +391,8 @@ class PrecisionLandingNode(Node):
             'small_tag_confirm_time',
             'offset_tolerance',
             'small_tag_search_radius', 'small_tag_search_speed',
-            'primary_tag_id', 'secondary_tag_id']}
+            'primary_tag_id', 'secondary_tag_id',
+            'slow_descent_altitude']}
 
         self.fsm = LandingStateMachine(config)
         self.approach_alt = config['approach_altitude']

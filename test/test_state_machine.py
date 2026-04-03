@@ -1,4 +1,6 @@
-from dbvf_autonomy.precision_landing_node import LandingStateMachine, LandingState, PIDController
+from dbvf_autonomy.precision_landing_node import (
+    LandingStateMachine, LandingState, PIDController, wrap_angle,
+)
 
 
 class MockVehicleState:
@@ -32,6 +34,7 @@ CONFIG = {
     'small_tag_search_speed': 0.2,
     'primary_tag_id': 1,
     'secondary_tag_id': 2,
+    'slow_descent_altitude': 2.0,
 }
 
 # Target coordinates for all tests
@@ -214,23 +217,37 @@ def test_global_timeout():
 # ---------------------------------------------------------------------------
 
 def test_descend_coarse_to_offset():
-    """DESCEND_COARSE -> DESCEND_OFFSET when small tag detected for small_tag_confirm_time."""
+    """DESCEND_COARSE -> DESCEND_OFFSET when small tag confirmed AND below slow_descent_altitude."""
     sm = LandingStateMachine(CONFIG)
-    vs = _to_descend_coarse(sm)
+    _to_descend_coarse(sm)
 
+    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     # First detection starts the timer
-    sm.update(vs, small_tag, 10.0)
+    sm.update(low_vs, small_tag, 10.0)
     assert sm.state == LandingState.DESCEND_COARSE
 
     # Not enough time yet
-    sm.update(vs, small_tag, 11.0)
+    sm.update(low_vs, small_tag, 11.0)
     assert sm.state == LandingState.DESCEND_COARSE
 
-    # 2.0 seconds of continuous detection → transition
-    state, info = sm.update(vs, small_tag, 12.1)
+    # 2.0 seconds of continuous detection at low altitude → transition
+    state, info = sm.update(low_vs, small_tag, 12.1)
     assert state == LandingState.DESCEND_OFFSET
     assert info['action'] == 'small_tag_confirmed'
+
+
+def test_descend_coarse_stays_if_above_slow_descent_altitude():
+    """DESCEND_COARSE stays even with confirmed small tag when above slow_descent_altitude (ISS-016)."""
+    sm = LandingStateMachine(CONFIG)
+    _to_descend_coarse(sm)
+
+    high_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=5.0)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
+    # Confirm small tag for well over small_tag_confirm_time at high altitude
+    sm.update(high_vs, small_tag, 10.0)
+    sm.update(high_vs, small_tag, 13.0)  # 3.0s > 2.0s confirm time
+    assert sm.state == LandingState.DESCEND_COARSE  # Still descending, not hovering
 
 
 def test_descend_coarse_floor_with_primary_continues():
@@ -282,15 +299,16 @@ def test_descend_offset_to_final():
     to signal the node to check. We test the FSM returns the correct info.
     """
     sm = LandingStateMachine(CONFIG)
-    vs = _to_descend_coarse(sm)
+    _to_descend_coarse(sm)
 
+    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    sm.update(vs, small_tag, 10.0)
-    sm.update(vs, small_tag, 12.1)  # -> DESCEND_OFFSET
+    sm.update(low_vs, small_tag, 10.0)
+    sm.update(low_vs, small_tag, 12.1)  # -> DESCEND_OFFSET
     assert sm.state == LandingState.DESCEND_OFFSET
 
     # FSM returns use_offset=True — the node handles the actual transition
-    state, info = sm.update(vs, small_tag, 14.0)
+    state, info = sm.update(low_vs, small_tag, 14.0)
     assert state == LandingState.DESCEND_OFFSET
     assert info.get('use_offset') is True
 
@@ -298,17 +316,18 @@ def test_descend_offset_to_final():
 def test_descend_offset_tag_lost():
     """DESCEND_OFFSET -> SEARCH when small tag lost for tag_lost_timeout."""
     sm = LandingStateMachine(CONFIG)
-    vs = _to_descend_coarse(sm)
+    _to_descend_coarse(sm)
 
+    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    sm.update(vs, small_tag, 10.0)
-    sm.update(vs, small_tag, 12.1)  # -> DESCEND_OFFSET
+    sm.update(low_vs, small_tag, 10.0)
+    sm.update(low_vs, small_tag, 12.1)  # -> DESCEND_OFFSET
     assert sm.state == LandingState.DESCEND_OFFSET
 
     no_tag = MockTagStatus(detected=False)
-    sm.update(vs, no_tag, 14.0)  # Start lost timer
-    sm.update(vs, no_tag, 16.0)  # 2s < 4s
-    state, info = sm.update(vs, no_tag, 18.1)  # 4.1s > 4s
+    sm.update(low_vs, no_tag, 14.0)  # Start lost timer
+    sm.update(low_vs, no_tag, 16.0)  # 2s < 4s
+    state, info = sm.update(low_vs, no_tag, 18.1)  # 4.1s > 4s
     assert state == LandingState.SEARCH
     assert info['action'] == 'tag_lost'
 
@@ -316,11 +335,12 @@ def test_descend_offset_tag_lost():
 def test_descend_final_to_landed():
     """DESCEND_FINAL -> LANDED on landing detection."""
     sm = LandingStateMachine(CONFIG)
-    vs = _to_descend_coarse(sm)
+    _to_descend_coarse(sm)
 
+    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    sm.update(vs, small_tag, 10.0)
-    sm.update(vs, small_tag, 12.1)  # -> DESCEND_OFFSET
+    sm.update(low_vs, small_tag, 10.0)
+    sm.update(low_vs, small_tag, 12.1)  # -> DESCEND_OFFSET
     # Simulate offset achieved by setting state directly (as node would)
     sm.state = LandingState.DESCEND_FINAL
 
@@ -395,14 +415,15 @@ def test_global_timeout_from_descend_coarse():
 def test_global_timeout_from_descend_offset():
     """DESCEND_OFFSET -> ABORT_LAND on landing_timeout."""
     sm = LandingStateMachine(CONFIG)
-    vs = _to_descend_coarse(sm)
+    _to_descend_coarse(sm)
 
+    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    sm.update(vs, small_tag, 10.0)
-    sm.update(vs, small_tag, 12.1)  # -> DESCEND_OFFSET
+    sm.update(low_vs, small_tag, 10.0)
+    sm.update(low_vs, small_tag, 12.1)  # -> DESCEND_OFFSET
     assert sm.state == LandingState.DESCEND_OFFSET
 
-    state, info = sm.update(vs, small_tag, 62.0)  # timeout
+    state, info = sm.update(low_vs, small_tag, 62.0)  # timeout
     assert state == LandingState.ABORT_LAND
     assert info['action'] == 'timeout'
 
@@ -529,3 +550,48 @@ def test_body_frame_yaw_hold_uses_zero():
     # CORRECT: body-frame yaw hold = 0.0 (no rotation from current heading)
     correct_yaw = 0.0
     assert correct_yaw == 0.0
+
+
+# ---------------------------------------------------------------------------
+# wrap_angle tests
+# ---------------------------------------------------------------------------
+
+def test_wrap_angle_zero():
+    assert wrap_angle(0.0) == 0.0
+
+
+def test_wrap_angle_positive_within_range():
+    import math
+    assert abs(wrap_angle(1.0) - 1.0) < 1e-9
+
+
+def test_wrap_angle_negative_within_range():
+    import math
+    assert abs(wrap_angle(-1.0) - (-1.0)) < 1e-9
+
+
+def test_wrap_angle_greater_than_pi():
+    import math
+    # 3*pi/2 should wrap to -pi/2
+    result = wrap_angle(3 * math.pi / 2)
+    assert abs(result - (-math.pi / 2)) < 1e-9
+
+
+def test_wrap_angle_less_than_neg_pi():
+    import math
+    # -3*pi/2 should wrap to pi/2
+    result = wrap_angle(-3 * math.pi / 2)
+    assert abs(result - (math.pi / 2)) < 1e-9
+
+
+def test_wrap_angle_exactly_pi():
+    import math
+    # pi should stay as pi (boundary)
+    result = wrap_angle(math.pi)
+    assert abs(result - math.pi) < 1e-9 or abs(result - (-math.pi)) < 1e-9
+
+
+def test_wrap_angle_two_pi():
+    import math
+    result = wrap_angle(2 * math.pi)
+    assert abs(result) < 1e-9
