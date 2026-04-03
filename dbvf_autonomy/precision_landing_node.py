@@ -440,6 +440,12 @@ class PrecisionLandingNode(Node):
         self.declare_parameter('servo_pid_i', 0.0)
         self.declare_parameter('servo_pid_d', 0.1)
         self.declare_parameter('servo_max_speed', 0.5)
+        self.declare_parameter('hold_position_tolerance', 0.10)
+        self.declare_parameter('hold_stabilize_time', 0.5)
+        self.declare_parameter('yaw_alignment_tolerance', 0.087)
+        self.declare_parameter('yaw_alignment_hold_time', 0.5)
+        self.declare_parameter('yaw_kp', 0.5)
+        self.declare_parameter('max_yaw_rate', 0.35)
         self.declare_parameter('primary_tag_id', 1)
         self.declare_parameter('secondary_tag_id', 2)
         self.declare_parameter('slow_descent_altitude', 2.0)
@@ -470,6 +476,13 @@ class PrecisionLandingNode(Node):
         self.pid_x = PIDController(kp, ki, kd, max_speed)
         self.pid_y = PIDController(kp, ki, kd, max_speed)
 
+        self._hold_position_tolerance = self.get_parameter('hold_position_tolerance').value
+        self._hold_stabilize_time = self.get_parameter('hold_stabilize_time').value
+        self._yaw_alignment_tolerance = self.get_parameter('yaw_alignment_tolerance').value
+        self._yaw_alignment_hold_time = self.get_parameter('yaw_alignment_hold_time').value
+        self._yaw_kp = self.get_parameter('yaw_kp').value
+        self._max_yaw_rate = self.get_parameter('max_yaw_rate').value
+
         self._slow_descent_altitude = self.get_parameter('slow_descent_altitude').value
         self._slow_descent_rate = self.get_parameter('slow_descent_rate').value
         self._slow_descent_active = False
@@ -480,6 +493,9 @@ class PrecisionLandingNode(Node):
         self._search_target_alt = 0.0
         self._last_guided_time = 0.0
         self._last_control_time = 0.0
+        self.target_yaw = 0.0
+        self._hold_stable_since = None
+        self._yaw_aligned_since = None
 
         # Subscribers
         self.create_subscription(
@@ -533,14 +549,18 @@ class PrecisionLandingNode(Node):
 
         self.offset_forward = request.offset_forward
         self.offset_right = request.offset_right
+        self.target_yaw = request.target_yaw
         self.get_logger().info(
             f'Starting precision landing at '
             f'{request.target_lat:.7f}, {request.target_lon:.7f} '
-            f'(offset fwd={self.offset_forward:.3f}, right={self.offset_right:.3f})')
+            f'(offset fwd={self.offset_forward:.3f}, right={self.offset_right:.3f}, '
+            f'yaw={self.target_yaw:.3f}rad)')
         self.fsm.start(request.target_lat, request.target_lon)
         self.pid_x.reset()
         self.pid_y.reset()
         self._last_control_time = 0.0
+        self._hold_stable_since = None
+        self._yaw_aligned_since = None
 
         self._call_set_mode('GUIDED')
         self._call_guided_position(
@@ -577,6 +597,14 @@ class PrecisionLandingNode(Node):
             elif state == LandingState.DESCEND_COARSE:
                 self.pid_x.reset()
                 self.pid_y.reset()
+            elif state == LandingState.HOLD_ABOVE_TAG:
+                self.pid_x.reset()
+                self.pid_y.reset()
+                self._hold_stable_since = None
+            elif state == LandingState.ALIGN_YAW:
+                self.pid_x.reset()
+                self.pid_y.reset()
+                self._yaw_aligned_since = None
             elif state == LandingState.OFFSET_LATERAL:
                 self.pid_x.reset()
                 self.pid_y.reset()
@@ -606,6 +634,7 @@ class PrecisionLandingNode(Node):
                 self._last_guided_time = now
 
         elif state in (LandingState.DESCEND_COARSE,
+                       LandingState.HOLD_ABOVE_TAG, LandingState.ALIGN_YAW,
                        LandingState.OFFSET_LATERAL, LandingState.DESCEND_FINAL):
             self._velocity_servo(state, info, now)
 
