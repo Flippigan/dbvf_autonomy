@@ -420,6 +420,71 @@ def test_hold_above_tag_tag_reacquired_resets_timer():
     assert state == LandingState.HOLD_ABOVE_TAG
 
 
+# ---------------------------------------------------------------------------
+# ALIGN_YAW tests
+# ---------------------------------------------------------------------------
+
+def test_align_yaw_returns_aligning_action():
+    """ALIGN_YAW returns vz=0.0 and use_offset=False."""
+    sm = LandingStateMachine(CONFIG)
+    vs = _to_align_yaw(sm)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
+    state, info = sm.update(vs, small_tag, 14.0)
+    assert state == LandingState.ALIGN_YAW
+    assert info['action'] == 'aligning_yaw'
+    assert info['vz'] == 0.0
+    assert info['use_offset'] is False
+
+
+def test_align_yaw_tag_lost_to_search():
+    """ALIGN_YAW → SEARCH when secondary tag lost for tag_lost_timeout."""
+    sm = LandingStateMachine(CONFIG)
+    vs = _to_align_yaw(sm)
+    no_tag = MockTagStatus(detected=False)
+    sm.update(vs, no_tag, 14.0)  # Start lost timer
+    sm.update(vs, no_tag, 16.0)  # 2s < 4s
+    state, info = sm.update(vs, no_tag, 18.1)  # 4.1s > 4s
+    assert state == LandingState.SEARCH
+    assert info['action'] == 'tag_lost'
+
+
+def test_align_yaw_primary_only_triggers_tag_lost():
+    """ALIGN_YAW with only primary tag visible → tag_lost timer runs."""
+    sm = LandingStateMachine(CONFIG)
+    vs = _to_align_yaw(sm)
+    primary_tag = MockTagStatus(detected=True, active_tag_id=1)
+    sm.update(vs, primary_tag, 14.0)
+    sm.update(vs, primary_tag, 16.0)
+    state, info = sm.update(vs, primary_tag, 18.1)
+    assert state == LandingState.SEARCH
+    assert info['action'] == 'tag_lost'
+
+
+def test_align_yaw_to_landed():
+    """ALIGN_YAW → LANDED on disarm."""
+    sm = LandingStateMachine(CONFIG)
+    _to_align_yaw(sm)
+    landed = MockVehicleState(lat=LAT, lon=LON, alt_rel=0.05, armed=False, vz=0.0)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
+    state, info = sm.update(landed, small_tag, 14.0)
+    assert state == LandingState.LANDED
+    assert info['action'] == 'landed'
+
+
+def test_align_yaw_tag_reacquired_resets_timer():
+    """ALIGN_YAW tag reacquired before timeout resets lost timer."""
+    sm = LandingStateMachine(CONFIG)
+    vs = _to_align_yaw(sm)
+    no_tag = MockTagStatus(detected=False)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
+    sm.update(vs, no_tag, 14.0)   # Lost
+    sm.update(vs, no_tag, 16.0)   # 2s
+    sm.update(vs, small_tag, 16.5)  # Reacquired
+    sm.update(vs, no_tag, 17.0)   # Lost again
+    state, _ = sm.update(vs, no_tag, 20.5)  # 3.5s < 4s
+    assert state == LandingState.ALIGN_YAW
+
+
 def test_descend_final_to_landed():
     """DESCEND_FINAL -> LANDED on landing detection."""
     sm = LandingStateMachine(CONFIG)
