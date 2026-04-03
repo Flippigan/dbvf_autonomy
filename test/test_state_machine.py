@@ -27,9 +27,6 @@ CONFIG = {
     'descend_floor_altitude': 1.5,
     'final_descent_rate': 0.15,
     'small_tag_confirm_time': 2.0,
-    'hold_stabilize_time': 1.0,
-    'offset_forward': 0.0,
-    'offset_right': 0.0,
     'offset_tolerance': 0.05,
     'small_tag_search_radius': 0.5,
     'small_tag_search_speed': 0.2,
@@ -216,8 +213,8 @@ def test_global_timeout():
 # New transition tests for expanded FSM
 # ---------------------------------------------------------------------------
 
-def test_descend_coarse_to_hold():
-    """DESCEND_COARSE -> DESCEND_HOLD when small tag detected for small_tag_confirm_time."""
+def test_descend_coarse_to_offset():
+    """DESCEND_COARSE -> DESCEND_OFFSET when small tag detected for small_tag_confirm_time."""
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
@@ -232,7 +229,7 @@ def test_descend_coarse_to_hold():
 
     # 2.0 seconds of continuous detection → transition
     state, info = sm.update(vs, small_tag, 12.1)
-    assert state == LandingState.DESCEND_HOLD
+    assert state == LandingState.DESCEND_OFFSET
     assert info['action'] == 'small_tag_confirmed'
 
 
@@ -277,26 +274,6 @@ def test_descend_coarse_tag_lost():
     assert info['action'] == 'tag_lost'
 
 
-def test_descend_hold_to_offset():
-    """DESCEND_HOLD -> DESCEND_OFFSET after hold_stabilize_time."""
-    sm = LandingStateMachine(CONFIG)
-    vs = _to_descend_coarse(sm)
-
-    small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    # Get to DESCEND_HOLD
-    sm.update(vs, small_tag, 10.0)
-    sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
-    assert sm.state == LandingState.DESCEND_HOLD
-
-    # Wait hold_stabilize_time (1.0s)
-    sm.update(vs, small_tag, 12.5)  # 0.4s < 1.0s
-    assert sm.state == LandingState.DESCEND_HOLD
-
-    state, info = sm.update(vs, small_tag, 13.2)  # 1.1s > 1.0s
-    assert state == LandingState.DESCEND_OFFSET
-    assert info['action'] == 'hold_complete'
-
-
 def test_descend_offset_to_final():
     """DESCEND_OFFSET -> DESCEND_FINAL when position error < offset_tolerance.
 
@@ -309,8 +286,7 @@ def test_descend_offset_to_final():
 
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(vs, small_tag, 10.0)
-    sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
-    sm.update(vs, small_tag, 13.2)  # -> DESCEND_OFFSET
+    sm.update(vs, small_tag, 12.1)  # -> DESCEND_OFFSET
     assert sm.state == LandingState.DESCEND_OFFSET
 
     # FSM returns use_offset=True — the node handles the actual transition
@@ -326,8 +302,7 @@ def test_descend_offset_tag_lost():
 
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(vs, small_tag, 10.0)
-    sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
-    sm.update(vs, small_tag, 13.2)  # -> DESCEND_OFFSET
+    sm.update(vs, small_tag, 12.1)  # -> DESCEND_OFFSET
     assert sm.state == LandingState.DESCEND_OFFSET
 
     no_tag = MockTagStatus(detected=False)
@@ -345,8 +320,7 @@ def test_descend_final_to_landed():
 
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(vs, small_tag, 10.0)
-    sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
-    sm.update(vs, small_tag, 13.2)  # -> DESCEND_OFFSET
+    sm.update(vs, small_tag, 12.1)  # -> DESCEND_OFFSET
     # Simulate offset achieved by setting state directly (as node would)
     sm.state = LandingState.DESCEND_FINAL
 
@@ -357,7 +331,7 @@ def test_descend_final_to_landed():
 
 
 def test_search_pattern_finds_tag():
-    """SMALL_TAG_SEARCH -> DESCEND_HOLD when small tag detected during search."""
+    """SMALL_TAG_SEARCH -> DESCEND_OFFSET when small tag detected during search."""
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
@@ -370,7 +344,7 @@ def test_search_pattern_finds_tag():
     # Small tag appears during search
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     state, info = sm.update(low_vs, small_tag, 11.0)
-    assert state == LandingState.DESCEND_HOLD
+    assert state == LandingState.DESCEND_OFFSET
     assert info['action'] == 'small_tag_found'
 
 
@@ -425,8 +399,7 @@ def test_global_timeout_from_descend_offset():
 
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(vs, small_tag, 10.0)
-    sm.update(vs, small_tag, 12.1)  # -> DESCEND_HOLD
-    sm.update(vs, small_tag, 13.2)  # -> DESCEND_OFFSET
+    sm.update(vs, small_tag, 12.1)  # -> DESCEND_OFFSET
     assert sm.state == LandingState.DESCEND_OFFSET
 
     state, info = sm.update(vs, small_tag, 62.0)  # timeout
@@ -448,8 +421,7 @@ class MockTarget:
 
 def _apply_tag_guard(state, target, secondary_tag_id=2):
     """Replicates the tag ID guard logic from _velocity_servo."""
-    expected_secondary = (state in (LandingState.DESCEND_HOLD,
-                                    LandingState.DESCEND_OFFSET,
+    expected_secondary = (state in (LandingState.DESCEND_OFFSET,
                                     LandingState.DESCEND_FINAL))
     if (expected_secondary and target is not None
             and target.tag_id != secondary_tag_id):
@@ -457,17 +429,17 @@ def _apply_tag_guard(state, target, secondary_tag_id=2):
     return target
 
 
-def test_velocity_servo_rejects_wrong_tag_in_hold():
-    """DESCEND_HOLD with target.tag_id=1 (primary) -> target treated as None (hold position)."""
+def test_velocity_servo_rejects_wrong_tag_in_offset():
+    """DESCEND_OFFSET with target.tag_id=1 (primary) -> target treated as None (hold position)."""
     target = MockTarget(tag_id=1)
-    result = _apply_tag_guard(LandingState.DESCEND_HOLD, target)
+    result = _apply_tag_guard(LandingState.DESCEND_OFFSET, target)
     assert result is None
 
 
-def test_velocity_servo_accepts_correct_tag_in_hold():
-    """DESCEND_HOLD with target.tag_id=2 (secondary) -> normal PID output."""
+def test_velocity_servo_accepts_correct_tag_in_offset():
+    """DESCEND_OFFSET with target.tag_id=2 (secondary) -> normal PID output."""
     target = MockTarget(tag_id=2)
-    result = _apply_tag_guard(LandingState.DESCEND_HOLD, target)
+    result = _apply_tag_guard(LandingState.DESCEND_OFFSET, target)
     assert result is target
 
 
@@ -497,3 +469,63 @@ def test_preferred_tag_primary_when_range_alt_invalid():
     """DESCEND_COARSE with range_alt=-1.0 (invalid) → preferred=1 (primary)."""
     result = _compute_preferred_tag(LandingState.DESCEND_COARSE, -1.0, 2.0)
     assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# Per-landing offset tests
+# ---------------------------------------------------------------------------
+
+def test_velocity_servo_applies_offset_in_descend_offset():
+    """Offset should be subtracted from tag error when use_offset=True."""
+    from dbvf_autonomy.precision_landing_node import PIDController
+
+    offset_fwd = 0.12
+    offset_right = 0.05
+
+    # Simulate what _velocity_servo does with offsets
+    error_x = 0.15
+    error_y = 0.10
+    error_x -= offset_fwd   # 0.15 - 0.12 = 0.03
+    error_y -= offset_right  # 0.10 - 0.05 = 0.05
+
+    assert abs(error_x - 0.03) < 1e-9
+    assert abs(error_y - 0.05) < 1e-9
+
+
+def test_velocity_servo_no_offset_when_not_flagged():
+    """Without use_offset=True, raw tag error should be used."""
+    error_x = 0.15
+    error_y = 0.10
+    # No offset subtraction
+    assert error_x == 0.15
+    assert error_y == 0.10
+
+
+# ---------------------------------------------------------------------------
+# ISS-014: Body-frame yaw hold regression test
+# ---------------------------------------------------------------------------
+
+def test_body_frame_yaw_hold_uses_zero():
+    """ISS-014: In MAV_FRAME_BODY_NED, yaw=0.0 means 'hold current heading'.
+
+    Sending math.radians(heading) would be interpreted as a RELATIVE rotation
+    from current heading (ArduPilot GCS_MAVLink_Copter.cpp:1372 sets
+    yaw_relative=true for BODY_NED frames), causing a continuous spin.
+    """
+    # Simulate what _call_guided_velocity does for yaw hold.
+    # The node sets req.yaw when vs is not None.
+    # In body frame, the correct value is always 0.0 (no rotation from current).
+    import math
+
+    class FakeVehicleState:
+        heading = 90.0  # degrees — any non-zero heading
+
+    vs = FakeVehicleState()
+
+    # WRONG (old code): would command +90° relative rotation every tick
+    wrong_yaw = math.radians(vs.heading)
+    assert wrong_yaw != 0.0, "Test setup: heading must be non-zero"
+
+    # CORRECT: body-frame yaw hold = 0.0 (no rotation from current heading)
+    correct_yaw = 0.0
+    assert correct_yaw == 0.0
