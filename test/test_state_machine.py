@@ -65,6 +65,29 @@ def _to_descend_coarse(sm):
     return vs
 
 
+def _to_hold_above_tag(sm):
+    """Advance from IDLE to HOLD_ABOVE_TAG by directly setting state.
+
+    In production, DESCEND_COARSE transitions here after small tag
+    confirmation. We set state directly to decouple from the transition
+    target update (Task 6). The natural transition path is tested there.
+    """
+    vs = _to_descend_coarse(sm)
+    sm.state = LandingState.HOLD_ABOVE_TAG
+    return vs
+
+
+def _to_align_yaw(sm):
+    """Advance from IDLE to ALIGN_YAW by directly setting state.
+
+    In production, the ROS node triggers HOLD_ABOVE_TAG → ALIGN_YAW
+    when position is stable. We simulate that by setting state directly.
+    """
+    vs = _to_hold_above_tag(sm)
+    sm.state = LandingState.ALIGN_YAW
+    return vs
+
+
 # ---------------------------------------------------------------------------
 # Original tests (updated for new action dict format)
 # ---------------------------------------------------------------------------
@@ -330,6 +353,71 @@ def test_offset_lateral_tag_lost():
     state, info = sm.update(low_vs, no_tag, 18.1)  # 4.1s > 4s
     assert state == LandingState.SEARCH
     assert info['action'] == 'tag_lost'
+
+
+# ---------------------------------------------------------------------------
+# HOLD_ABOVE_TAG tests
+# ---------------------------------------------------------------------------
+
+def test_hold_above_tag_returns_hold_action():
+    """HOLD_ABOVE_TAG returns vz=0.0 and use_offset=False."""
+    sm = LandingStateMachine(CONFIG)
+    vs = _to_hold_above_tag(sm)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
+    state, info = sm.update(vs, small_tag, 13.0)
+    assert state == LandingState.HOLD_ABOVE_TAG
+    assert info['action'] == 'holding'
+    assert info['vz'] == 0.0
+    assert info['use_offset'] is False
+
+
+def test_hold_above_tag_tag_lost_to_search():
+    """HOLD_ABOVE_TAG → SEARCH when secondary tag lost for tag_lost_timeout."""
+    sm = LandingStateMachine(CONFIG)
+    vs = _to_hold_above_tag(sm)
+    no_tag = MockTagStatus(detected=False)
+    sm.update(vs, no_tag, 13.0)  # Start lost timer
+    sm.update(vs, no_tag, 15.0)  # 2s < 4s
+    state, info = sm.update(vs, no_tag, 17.1)  # 4.1s > 4s
+    assert state == LandingState.SEARCH
+    assert info['action'] == 'tag_lost'
+
+
+def test_hold_above_tag_primary_only_triggers_tag_lost():
+    """HOLD_ABOVE_TAG with only primary tag visible → tag_lost timer runs."""
+    sm = LandingStateMachine(CONFIG)
+    vs = _to_hold_above_tag(sm)
+    primary_tag = MockTagStatus(detected=True, active_tag_id=1)
+    sm.update(vs, primary_tag, 13.0)  # Primary only — secondary lost
+    sm.update(vs, primary_tag, 15.0)
+    state, info = sm.update(vs, primary_tag, 17.1)  # 4.1s > 4s
+    assert state == LandingState.SEARCH
+    assert info['action'] == 'tag_lost'
+
+
+def test_hold_above_tag_to_landed():
+    """HOLD_ABOVE_TAG → LANDED on disarm."""
+    sm = LandingStateMachine(CONFIG)
+    _to_hold_above_tag(sm)
+    landed = MockVehicleState(lat=LAT, lon=LON, alt_rel=0.05, armed=False, vz=0.0)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
+    state, info = sm.update(landed, small_tag, 13.0)
+    assert state == LandingState.LANDED
+    assert info['action'] == 'landed'
+
+
+def test_hold_above_tag_tag_reacquired_resets_timer():
+    """HOLD_ABOVE_TAG tag reacquired before timeout resets lost timer."""
+    sm = LandingStateMachine(CONFIG)
+    vs = _to_hold_above_tag(sm)
+    no_tag = MockTagStatus(detected=False)
+    small_tag = MockTagStatus(detected=True, active_tag_id=2)
+    sm.update(vs, no_tag, 13.0)   # Lost at t=13
+    sm.update(vs, no_tag, 15.0)   # 2s elapsed
+    sm.update(vs, small_tag, 15.5)  # Reacquired — resets timer
+    sm.update(vs, no_tag, 16.0)   # Lost again at t=16
+    state, _ = sm.update(vs, no_tag, 19.5)  # 3.5s < 4s
+    assert state == LandingState.HOLD_ABOVE_TAG
 
 
 def test_descend_final_to_landed():

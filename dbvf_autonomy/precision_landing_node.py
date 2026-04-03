@@ -149,6 +149,8 @@ class LandingStateMachine:
             return self._search(vehicle_state, tag_status, current_time)
         if self.state == LandingState.DESCEND_COARSE:
             return self._descend_coarse(vehicle_state, tag_status, current_time)
+        if self.state == LandingState.HOLD_ABOVE_TAG:
+            return self._hold_above_tag(vehicle_state, tag_status, current_time)
         if self.state == LandingState.OFFSET_LATERAL:
             return self._offset_lateral(vehicle_state, tag_status, current_time)
         if self.state == LandingState.DESCEND_FINAL:
@@ -242,6 +244,33 @@ class LandingStateMachine:
         return self.state, {
             'action': 'descending',
             'vz': self.config['search_descent_rate'],
+        }
+
+    def _hold_above_tag(self, vs, tag_status, current_time):
+        if self._is_landed(vs):
+            self.state = LandingState.LANDED
+            return self.state, {'action': 'landed'}
+
+        tag_detected = tag_status and tag_status.detected
+        small_tag_detected = (tag_detected
+                              and tag_status.active_tag_id
+                              == self.config.get('secondary_tag_id', 1))
+
+        if not small_tag_detected:
+            if self.tag_lost_time is None:
+                self.tag_lost_time = current_time
+            elif (current_time - self.tag_lost_time
+                  > self.config['tag_lost_timeout']):
+                self.tag_lost_time = None
+                self.state = LandingState.SEARCH
+                return self.state, {'action': 'tag_lost'}
+        else:
+            self.tag_lost_time = None
+
+        return self.state, {
+            'action': 'holding',
+            'vz': 0.0,
+            'use_offset': False,
         }
 
     def _offset_lateral(self, vs, tag_status, current_time):
