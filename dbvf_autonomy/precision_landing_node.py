@@ -673,11 +673,15 @@ class PrecisionLandingNode(Node):
         target = self.latest_target
 
         # Safety check: reject primary tag data during secondary-tag states
-        expected_secondary = (state in (LandingState.OFFSET_LATERAL,
+        expected_secondary = (state in (LandingState.HOLD_ABOVE_TAG,
+                                        LandingState.ALIGN_YAW,
+                                        LandingState.OFFSET_LATERAL,
                                         LandingState.DESCEND_FINAL))
         if (expected_secondary and target is not None
                 and target.tag_id != self.fsm.config.get('secondary_tag_id', 1)):
             target = None
+
+        yaw_rate_cmd = None
 
         tag_detected = (self.latest_tag_status
                         and self.latest_tag_status.detected
@@ -690,6 +694,46 @@ class PrecisionLandingNode(Node):
             if use_offset:
                 error_x -= self.offset_forward
                 error_y -= self.offset_right
+
+            # HOLD_ABOVE_TAG → ALIGN_YAW (position stability check)
+            if state == LandingState.HOLD_ABOVE_TAG:
+                if math.sqrt(error_x**2 + error_y**2) < self._hold_position_tolerance:
+                    if self._hold_stable_since is None:
+                        self._hold_stable_since = now
+                    elif now - self._hold_stable_since >= self._hold_stabilize_time:
+                        self.fsm.state = LandingState.ALIGN_YAW
+                        self._hold_stable_since = None
+                        self.get_logger().info(
+                            f'{state.value} -> ALIGN_YAW (position_stable)')
+                else:
+                    self._hold_stable_since = None
+
+            # ALIGN_YAW → OFFSET_LATERAL (yaw alignment check + yaw rate command)
+            if state == LandingState.ALIGN_YAW:
+                tag_yaw = getattr(target, 'tag_yaw', None)
+                if tag_yaw is not None:
+                    yaw_error = wrap_angle(self.target_yaw - tag_yaw)
+                    yaw_rate_cmd = self._yaw_kp * yaw_error
+                    yaw_rate_cmd = max(-self._max_yaw_rate,
+                                      min(self._max_yaw_rate, yaw_rate_cmd))
+                    if abs(yaw_error) < self._yaw_alignment_tolerance:
+                        if self._yaw_aligned_since is None:
+                            self._yaw_aligned_since = now
+                        elif (now - self._yaw_aligned_since
+                              >= self._yaw_alignment_hold_time):
+                            self.fsm.state = LandingState.OFFSET_LATERAL
+                            self._yaw_aligned_since = None
+                            self.get_logger().info(
+                                f'{state.value} -> OFFSET_LATERAL (yaw_aligned)')
+                            yaw_rate_cmd = None  # Stop rotating
+                    else:
+                        self._yaw_aligned_since = None
+                else:
+                    # No tag_yaw available (ISS-015 not implemented) — skip alignment
+                    self.fsm.state = LandingState.OFFSET_LATERAL
+                    self.get_logger().info(
+                        f'{state.value} -> OFFSET_LATERAL (no_tag_yaw, skipped)')
+                    yaw_rate_cmd = None
 
             # Check if offset is achieved (for OFFSET_LATERAL transition)
             if (state == LandingState.OFFSET_LATERAL
@@ -708,7 +752,7 @@ class PrecisionLandingNode(Node):
             self.pid_x.reset()
             self.pid_y.reset()
 
-        self._call_guided_velocity(vx, vy, vz)
+        self._call_guided_velocity(vx, vy, vz, yaw_rate=yaw_rate_cmd)
 
     # -- MAVLink service helpers ----------------------------------------------
 
@@ -732,7 +776,7 @@ class PrecisionLandingNode(Node):
         req.alt = alt
         self.guided_cli.call_async(req)
 
-    def _call_guided_velocity(self, vx, vy, vz):
+    def _call_guided_velocity(self, vx, vy, vz, yaw_rate=None):
         # Global descent rate clamp near ground (ISS-011)
         vs = self.latest_vehicle_state
         if vs is not None:
@@ -757,12 +801,10 @@ class PrecisionLandingNode(Node):
         req.vy = vy
         req.vz = vz
 
-        # Hold current heading during descent (prevents yaw hunting from
-        # WP_YAW_BEHAVIOR default).  In MAV_FRAME_BODY_NED, yaw is
-        # body-relative: 0.0 = "no rotation from current heading".
-        # Do NOT use math.radians(vs.heading) — that would be interpreted
-        # as a relative rotation, causing continuous spin (ISS-014).
-        if vs is not None:
+        if yaw_rate is not None:
+            req.yaw_rate = yaw_rate
+            req.use_yaw_rate = True
+        elif vs is not None:
             req.yaw = 0.0
             req.use_yaw = True
 
