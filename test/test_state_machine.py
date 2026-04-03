@@ -217,7 +217,7 @@ def test_global_timeout():
 # ---------------------------------------------------------------------------
 
 def test_descend_coarse_to_offset():
-    """DESCEND_COARSE -> DESCEND_OFFSET when small tag confirmed AND below slow_descent_altitude."""
+    """DESCEND_COARSE -> OFFSET_LATERAL when small tag confirmed AND below slow_descent_altitude."""
     sm = LandingStateMachine(CONFIG)
     _to_descend_coarse(sm)
 
@@ -233,7 +233,7 @@ def test_descend_coarse_to_offset():
 
     # 2.0 seconds of continuous detection at low altitude → transition
     state, info = sm.update(low_vs, small_tag, 12.1)
-    assert state == LandingState.DESCEND_OFFSET
+    assert state == LandingState.OFFSET_LATERAL
     assert info['action'] == 'small_tag_confirmed'
 
 
@@ -291,11 +291,11 @@ def test_descend_coarse_tag_lost():
     assert info['action'] == 'tag_lost'
 
 
-def test_descend_offset_to_final():
-    """DESCEND_OFFSET -> DESCEND_FINAL when position error < offset_tolerance.
+def test_offset_lateral_to_final():
+    """OFFSET_LATERAL -> DESCEND_FINAL when position error < offset_tolerance.
 
     Note: The actual offset checking is done in the ROS node's _velocity_servo,
-    which directly sets fsm.state. The FSM's _descend_offset returns use_offset=True
+    which directly sets fsm.state. The FSM's _offset_lateral returns use_offset=True
     to signal the node to check. We test the FSM returns the correct info.
     """
     sm = LandingStateMachine(CONFIG)
@@ -304,25 +304,25 @@ def test_descend_offset_to_final():
     low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(low_vs, small_tag, 10.0)
-    sm.update(low_vs, small_tag, 12.1)  # -> DESCEND_OFFSET
-    assert sm.state == LandingState.DESCEND_OFFSET
+    sm.update(low_vs, small_tag, 12.1)  # -> OFFSET_LATERAL
+    assert sm.state == LandingState.OFFSET_LATERAL
 
     # FSM returns use_offset=True — the node handles the actual transition
     state, info = sm.update(low_vs, small_tag, 14.0)
-    assert state == LandingState.DESCEND_OFFSET
+    assert state == LandingState.OFFSET_LATERAL
     assert info.get('use_offset') is True
 
 
-def test_descend_offset_tag_lost():
-    """DESCEND_OFFSET -> SEARCH when small tag lost for tag_lost_timeout."""
+def test_offset_lateral_tag_lost():
+    """OFFSET_LATERAL -> SEARCH when small tag lost for tag_lost_timeout."""
     sm = LandingStateMachine(CONFIG)
     _to_descend_coarse(sm)
 
     low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(low_vs, small_tag, 10.0)
-    sm.update(low_vs, small_tag, 12.1)  # -> DESCEND_OFFSET
-    assert sm.state == LandingState.DESCEND_OFFSET
+    sm.update(low_vs, small_tag, 12.1)  # -> OFFSET_LATERAL
+    assert sm.state == LandingState.OFFSET_LATERAL
 
     no_tag = MockTagStatus(detected=False)
     sm.update(low_vs, no_tag, 14.0)  # Start lost timer
@@ -340,7 +340,7 @@ def test_descend_final_to_landed():
     low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(low_vs, small_tag, 10.0)
-    sm.update(low_vs, small_tag, 12.1)  # -> DESCEND_OFFSET
+    sm.update(low_vs, small_tag, 12.1)  # -> OFFSET_LATERAL
     # Simulate offset achieved by setting state directly (as node would)
     sm.state = LandingState.DESCEND_FINAL
 
@@ -351,7 +351,7 @@ def test_descend_final_to_landed():
 
 
 def test_search_pattern_finds_tag():
-    """SMALL_TAG_SEARCH -> DESCEND_OFFSET when small tag detected during search."""
+    """SMALL_TAG_SEARCH -> OFFSET_LATERAL when small tag detected during search."""
     sm = LandingStateMachine(CONFIG)
     vs = _to_descend_coarse(sm)
 
@@ -364,7 +364,7 @@ def test_search_pattern_finds_tag():
     # Small tag appears during search
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     state, info = sm.update(low_vs, small_tag, 11.0)
-    assert state == LandingState.DESCEND_OFFSET
+    assert state == LandingState.OFFSET_LATERAL
     assert info['action'] == 'small_tag_found'
 
 
@@ -412,16 +412,16 @@ def test_global_timeout_from_descend_coarse():
     assert info['action'] == 'timeout'
 
 
-def test_global_timeout_from_descend_offset():
-    """DESCEND_OFFSET -> ABORT_LAND on landing_timeout."""
+def test_global_timeout_from_offset_lateral():
+    """OFFSET_LATERAL -> ABORT_LAND on landing_timeout."""
     sm = LandingStateMachine(CONFIG)
     _to_descend_coarse(sm)
 
     low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     sm.update(low_vs, small_tag, 10.0)
-    sm.update(low_vs, small_tag, 12.1)  # -> DESCEND_OFFSET
-    assert sm.state == LandingState.DESCEND_OFFSET
+    sm.update(low_vs, small_tag, 12.1)  # -> OFFSET_LATERAL
+    assert sm.state == LandingState.OFFSET_LATERAL
 
     state, info = sm.update(low_vs, small_tag, 62.0)  # timeout
     assert state == LandingState.ABORT_LAND
@@ -442,7 +442,9 @@ class MockTarget:
 
 def _apply_tag_guard(state, target, secondary_tag_id=2):
     """Replicates the tag ID guard logic from _velocity_servo."""
-    expected_secondary = (state in (LandingState.DESCEND_OFFSET,
+    expected_secondary = (state in (LandingState.HOLD_ABOVE_TAG,
+                                    LandingState.ALIGN_YAW,
+                                    LandingState.OFFSET_LATERAL,
                                     LandingState.DESCEND_FINAL))
     if (expected_secondary and target is not None
             and target.tag_id != secondary_tag_id):
@@ -451,16 +453,16 @@ def _apply_tag_guard(state, target, secondary_tag_id=2):
 
 
 def test_velocity_servo_rejects_wrong_tag_in_offset():
-    """DESCEND_OFFSET with target.tag_id=1 (primary) -> target treated as None (hold position)."""
+    """OFFSET_LATERAL with target.tag_id=1 (primary) -> target treated as None (hold position)."""
     target = MockTarget(tag_id=1)
-    result = _apply_tag_guard(LandingState.DESCEND_OFFSET, target)
+    result = _apply_tag_guard(LandingState.OFFSET_LATERAL, target)
     assert result is None
 
 
 def test_velocity_servo_accepts_correct_tag_in_offset():
-    """DESCEND_OFFSET with target.tag_id=2 (secondary) -> normal PID output."""
+    """OFFSET_LATERAL with target.tag_id=2 (secondary) -> normal PID output."""
     target = MockTarget(tag_id=2)
-    result = _apply_tag_guard(LandingState.DESCEND_OFFSET, target)
+    result = _apply_tag_guard(LandingState.OFFSET_LATERAL, target)
     assert result is target
 
 
@@ -490,6 +492,24 @@ def test_preferred_tag_primary_when_range_alt_invalid():
     """DESCEND_COARSE with range_alt=-1.0 (invalid) → preferred=1 (primary)."""
     result = _compute_preferred_tag(LandingState.DESCEND_COARSE, -1.0, 2.0)
     assert result == 1
+
+
+def test_preferred_tag_secondary_during_hold_above_tag():
+    """HOLD_ABOVE_TAG → preferred=2 (secondary)."""
+    result = _compute_preferred_tag(LandingState.HOLD_ABOVE_TAG, 1.5, 2.0)
+    assert result == 2
+
+
+def test_preferred_tag_secondary_during_align_yaw():
+    """ALIGN_YAW → preferred=2 (secondary)."""
+    result = _compute_preferred_tag(LandingState.ALIGN_YAW, 1.5, 2.0)
+    assert result == 2
+
+
+def test_preferred_tag_secondary_during_offset_lateral():
+    """OFFSET_LATERAL → preferred=2 (secondary)."""
+    result = _compute_preferred_tag(LandingState.OFFSET_LATERAL, 1.5, 2.0)
+    assert result == 2
 
 
 # ---------------------------------------------------------------------------

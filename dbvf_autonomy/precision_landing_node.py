@@ -72,7 +72,9 @@ class LandingState(Enum):
     APPROACH = 'APPROACH'
     SEARCH = 'SEARCH'
     DESCEND_COARSE = 'DESCEND_COARSE'
-    DESCEND_OFFSET = 'DESCEND_OFFSET'
+    HOLD_ABOVE_TAG = 'HOLD_ABOVE_TAG'
+    ALIGN_YAW = 'ALIGN_YAW'
+    OFFSET_LATERAL = 'OFFSET_LATERAL'
     DESCEND_FINAL = 'DESCEND_FINAL'
     SMALL_TAG_SEARCH = 'SMALL_TAG_SEARCH'
     LANDED = 'LANDED'
@@ -82,7 +84,8 @@ class LandingState(Enum):
 def compute_preferred_tag_id(state, range_alt, slow_descent_altitude,
                              primary_tag_id=1, secondary_tag_id=2):
     """Return the preferred tag ID for adapter coordination."""
-    if state in (LandingState.DESCEND_OFFSET,
+    if state in (LandingState.HOLD_ABOVE_TAG, LandingState.ALIGN_YAW,
+                 LandingState.OFFSET_LATERAL,
                  LandingState.DESCEND_FINAL, LandingState.SMALL_TAG_SEARCH):
         return secondary_tag_id
     if (state == LandingState.DESCEND_COARSE
@@ -146,8 +149,8 @@ class LandingStateMachine:
             return self._search(vehicle_state, tag_status, current_time)
         if self.state == LandingState.DESCEND_COARSE:
             return self._descend_coarse(vehicle_state, tag_status, current_time)
-        if self.state == LandingState.DESCEND_OFFSET:
-            return self._descend_offset(vehicle_state, tag_status, current_time)
+        if self.state == LandingState.OFFSET_LATERAL:
+            return self._offset_lateral(vehicle_state, tag_status, current_time)
         if self.state == LandingState.DESCEND_FINAL:
             return self._descend_final(vehicle_state, tag_status, current_time)
         if self.state == LandingState.SMALL_TAG_SEARCH:
@@ -196,7 +199,7 @@ class LandingStateMachine:
                               and tag_status.active_tag_id == self.config.get('secondary_tag_id', 1))
 
         # Track small tag continuous detection.
-        # Only transition to DESCEND_OFFSET when BOTH conditions are met:
+        # Only transition to OFFSET_LATERAL when BOTH conditions are met:
         #   1. Small tag confirmed for small_tag_confirm_time
         #   2. Drone is at or below slow_descent_altitude (fine-positioning altitude)
         # This keeps the drone descending during the initial approach and only
@@ -207,7 +210,7 @@ class LandingStateMachine:
             elif (current_time - self.small_tag_first_seen
                   >= self.config['small_tag_confirm_time']
                   and vs.alt_rel <= self.config.get('slow_descent_altitude', 2.0)):
-                self.state = LandingState.DESCEND_OFFSET
+                self.state = LandingState.OFFSET_LATERAL
                 self.small_tag_first_seen = None
                 return self.state, {'action': 'small_tag_confirmed'}
         else:
@@ -241,7 +244,7 @@ class LandingStateMachine:
             'vz': self.config['search_descent_rate'],
         }
 
-    def _descend_offset(self, vs, tag_status, current_time):
+    def _offset_lateral(self, vs, tag_status, current_time):
         if self._is_landed(vs):
             self.state = LandingState.LANDED
             return self.state, {'action': 'landed'}
@@ -289,7 +292,7 @@ class LandingStateMachine:
                               and tag_status.active_tag_id == self.config.get('secondary_tag_id', 1))
 
         if small_tag_detected:
-            self.state = LandingState.DESCEND_OFFSET
+            self.state = LandingState.OFFSET_LATERAL
             return self.state, {'action': 'small_tag_found'}
 
         radius = self.config['small_tag_search_radius']
@@ -516,7 +519,7 @@ class PrecisionLandingNode(Node):
             elif state == LandingState.DESCEND_COARSE:
                 self.pid_x.reset()
                 self.pid_y.reset()
-            elif state == LandingState.DESCEND_OFFSET:
+            elif state == LandingState.OFFSET_LATERAL:
                 self.pid_x.reset()
                 self.pid_y.reset()
             elif state == LandingState.ABORT_LAND:
@@ -545,7 +548,7 @@ class PrecisionLandingNode(Node):
                 self._last_guided_time = now
 
         elif state in (LandingState.DESCEND_COARSE,
-                       LandingState.DESCEND_OFFSET, LandingState.DESCEND_FINAL):
+                       LandingState.OFFSET_LATERAL, LandingState.DESCEND_FINAL):
             self._velocity_servo(state, info, now)
 
         elif state == LandingState.SMALL_TAG_SEARCH:
@@ -583,7 +586,7 @@ class PrecisionLandingNode(Node):
         target = self.latest_target
 
         # Safety check: reject primary tag data during secondary-tag states
-        expected_secondary = (state in (LandingState.DESCEND_OFFSET,
+        expected_secondary = (state in (LandingState.OFFSET_LATERAL,
                                         LandingState.DESCEND_FINAL))
         if (expected_secondary and target is not None
                 and target.tag_id != self.fsm.config.get('secondary_tag_id', 1)):
@@ -601,8 +604,8 @@ class PrecisionLandingNode(Node):
                 error_x -= self.offset_forward
                 error_y -= self.offset_right
 
-            # Check if offset is achieved (for DESCEND_OFFSET transition)
-            if (state == LandingState.DESCEND_OFFSET
+            # Check if offset is achieved (for OFFSET_LATERAL transition)
+            if (state == LandingState.OFFSET_LATERAL
                     and math.sqrt(error_x**2 + error_y**2)
                     < self.offset_tolerance):
                 self.fsm.state = LandingState.DESCEND_FINAL
