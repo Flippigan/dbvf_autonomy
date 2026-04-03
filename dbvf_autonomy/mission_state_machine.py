@@ -257,10 +257,10 @@ class MissionStateMachine:
         return self.state, {'action': 'transiting', 'entry_actions': entry}
 
     def _land_wa_descend(self, vs, t):
-        if self._landing_state == 'DESCEND_HOLD':
+        if self._landing_state == 'OFFSET_LATERAL':
             self.state = MissionState.WA_DROP_OLD_PAYLOAD
             self._wa_drop_start_time = t
-            return self.state, {'action': 'descend_hold_reached',
+            return self.state, {'action': 'descend_offset_reached',
                                 'entry_actions': ['arduino_servo_release']}
         if self._landing_state == 'ABORT_LAND':
             self.state = MissionState.ABORT

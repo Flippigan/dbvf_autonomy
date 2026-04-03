@@ -353,11 +353,11 @@ def test_land_wa_descend_waiting():
 def test_land_wa_descend_to_drop():
     sm = MissionStateMachine(_make_config())
     _to_land_wa_descend(sm)
-    sm.set_landing_state('DESCEND_HOLD')
+    sm.set_landing_state('OFFSET_LATERAL')
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
     state, info = sm.update(vs, 10.0)
     assert state == MissionState.WA_DROP_OLD_PAYLOAD
-    assert info['action'] == 'descend_hold_reached'
+    assert info['action'] == 'descend_offset_reached'
     assert 'arduino_servo_release' in info['entry_actions']
 
 
@@ -375,7 +375,7 @@ def test_land_wa_descend_abort():
 
 def _to_wa_drop_old_payload(sm):
     _to_land_wa_descend(sm)
-    sm.set_landing_state('DESCEND_HOLD')
+    sm.set_landing_state('OFFSET_LATERAL')
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
     sm.update(vs, 10.0)
     assert sm.state == MissionState.WA_DROP_OLD_PAYLOAD
