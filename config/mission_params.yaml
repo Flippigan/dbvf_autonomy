@@ -40,17 +40,15 @@ mission_sequencer:
     position_tolerance_m: 3.0       # GPS accuracy limit
     takeoff_complete_alt_ft: 33.0   # Altitude to consider takeoff complete
 
-    # ── Payload Servo ──────────────────────────────────────────────
-    drop_servo_number: 9
-    drop_servo_pwm_release: 1100
-    drop_servo_pwm_hold: 1500
+    # ── Payload Servo (Arduino Nano direct) ───────────────────────
+    payload_servo_channel: 0            # PCA9685 channel (0-15)
+    payload_servo_pwm_hold: 0           # Position 1: pre-loaded hold (TBD)
+    payload_servo_pwm_dispense: 0       # Position 2: release all payloads
+    payload_servo_pwm_drop: 0           # Position 3: drop cradle mechanism
+    payload_servo_pwm_pickup: 0         # Position 4: open for crew loading
+    payload_servo_pwm_lock: 0           # Position 5: lock new payload
     drop_settle_time_s: 2.0
-
-    # ── WA Reload Servo (Arduino) ─────────────────────────────────
-    pickup_servo_number: 1
-    pickup_servo_pwm_release: 1100
-    pickup_servo_pwm_pickup: 1500
-    pickup_settle_time_s: 2.0
+    payload_settle_time_s: 2.0          # Wait time after each servo move
 
     # ── WA Precision Landing Offset (camera-to-mechanism) ─────────
     wa_offset_forward: 0.0    # metres, positive = mechanism behind camera
