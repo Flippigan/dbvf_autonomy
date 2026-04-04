@@ -275,7 +275,7 @@ def test_transit_to_drop_arrived():
     state, info = sm.update(vs, 6.0)
     assert state == MissionState.DROP_PAYLOAD
     assert info['action'] == 'arrived_drop'
-    assert 'servo_release' in info['entry_actions']
+    assert 'arduino_servo_dispense' in info['entry_actions']
 
 
 def _to_drop_payload(sm):
@@ -305,7 +305,7 @@ def test_drop_payload_complete():
 
 # ---------------------------------------------------------------------------
 # FM-3: TRANSIT_TO_WA -> LAND_WA_DESCEND -> WA_DROP_OLD_PAYLOAD ->
-#        WA_SERVO_RESET -> LAND_WA_FINAL -> TAKEOFF_WA -> ...
+#        WA_PICKUP_READY -> LAND_WA_FINAL -> WA_LOCK_PAYLOAD -> TAKEOFF_WA -> ...
 # ---------------------------------------------------------------------------
 
 def _to_transit_to_wa(sm):
@@ -358,7 +358,7 @@ def test_land_wa_descend_to_drop():
     state, info = sm.update(vs, 10.0)
     assert state == MissionState.WA_DROP_OLD_PAYLOAD
     assert info['action'] == 'descend_offset_reached'
-    assert 'arduino_servo_release' in info['entry_actions']
+    assert 'arduino_servo_drop' in info['entry_actions']
 
 
 def test_land_wa_descend_abort():
@@ -395,32 +395,32 @@ def test_wa_drop_old_payload_complete():
     _to_wa_drop_old_payload(sm)
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
     state, info = sm.update(vs, 12.1)  # 2.1s > 2.0s settle
-    assert state == MissionState.WA_SERVO_RESET
+    assert state == MissionState.WA_PICKUP_READY
     assert info['action'] == 'drop_old_complete'
     assert 'arduino_servo_pickup' in info['entry_actions']
 
 
-# -- WA_SERVO_RESET ----------------------------------------------------------
+# -- WA_PICKUP_READY ---------------------------------------------------------
 
-def _to_wa_servo_reset(sm):
+def _to_wa_pickup_ready(sm):
     _to_wa_drop_old_payload(sm)
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
     sm.update(vs, 12.1)  # settle elapsed
-    assert sm.state == MissionState.WA_SERVO_RESET
+    assert sm.state == MissionState.WA_PICKUP_READY
 
 
-def test_wa_servo_reset_waiting():
+def test_wa_pickup_ready_waiting():
     sm = MissionStateMachine(_make_config())
-    _to_wa_servo_reset(sm)
+    _to_wa_pickup_ready(sm)
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
     state, info = sm.update(vs, 13.0)  # 0.9s < 2.0s settle
-    assert state == MissionState.WA_SERVO_RESET
+    assert state == MissionState.WA_PICKUP_READY
     assert info['action'] == 'resetting_servo'
 
 
-def test_wa_servo_reset_complete():
+def test_wa_pickup_ready_complete():
     sm = MissionStateMachine(_make_config())
-    _to_wa_servo_reset(sm)
+    _to_wa_pickup_ready(sm)
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
     state, info = sm.update(vs, 14.2)  # 2.1s > 2.0s settle
     assert state == MissionState.LAND_WA_FINAL
@@ -430,7 +430,7 @@ def test_wa_servo_reset_complete():
 # -- LAND_WA_FINAL -----------------------------------------------------------
 
 def _to_land_wa_final(sm):
-    _to_wa_servo_reset(sm)
+    _to_wa_pickup_ready(sm)
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.5, armed=True)
     sm.update(vs, 14.2)  # settle elapsed
     assert sm.state == MissionState.LAND_WA_FINAL
@@ -451,8 +451,9 @@ def test_land_wa_final_success():
     sm.set_landing_state('LANDED')
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
     state, info = sm.update(vs, 15.0)
-    assert state == MissionState.TAKEOFF_WA
+    assert state == MissionState.WA_LOCK_PAYLOAD
     assert info['action'] == 'landed_wa'
+    assert 'arduino_servo_lock' in info['entry_actions']
 
 
 def test_land_wa_final_abort():
@@ -465,13 +466,48 @@ def test_land_wa_final_abort():
     assert 'Precision landing failed' in info['reason']
 
 
-# -- TAKEOFF_WA (updated helper) ---------------------------------------------
+# -- WA_LOCK_PAYLOAD ---------------------------------------------------------
 
-def _to_takeoff_wa(sm):
+def _to_wa_lock_payload(sm):
     _to_land_wa_final(sm)
     sm.set_landing_state('LANDED')
     vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
     sm.update(vs, 15.0)
+    assert sm.state == MissionState.WA_LOCK_PAYLOAD
+
+
+def test_wa_lock_payload_waiting():
+    sm = MissionStateMachine(_make_config())
+    _to_wa_lock_payload(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
+    state, info = sm.update(vs, 16.0)  # 1.0s < 2.0s settle
+    assert state == MissionState.WA_LOCK_PAYLOAD
+    assert info['action'] == 'locking_payload'
+
+
+def test_wa_lock_payload_complete():
+    sm = MissionStateMachine(_make_config())
+    _to_wa_lock_payload(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
+    state, info = sm.update(vs, 17.1)  # 2.1s > 2.0s settle
+    assert state == MissionState.TAKEOFF_WA
+    assert info['action'] == 'lock_complete'
+    assert 'set_mode_guided' in info['entry_actions']
+    assert 'arm' in info['entry_actions']
+    assert 'takeoff' in info['entry_actions']
+
+
+def test_phase_wa_lock_payload():
+    from dbvf_autonomy.mission_state_machine import get_mission_phase
+    assert get_mission_phase(MissionState.WA_LOCK_PAYLOAD) == 'FM3'
+
+
+# -- TAKEOFF_WA (updated helper) ---------------------------------------------
+
+def _to_takeoff_wa(sm):
+    _to_wa_lock_payload(sm)
+    vs = MockVehicleState(lat=WA_LAT, lon=WA_LON, alt_rel=0.1, armed=False)
+    sm.update(vs, 17.1)  # lock settle elapsed
     assert sm.state == MissionState.TAKEOFF_WA
 
 
@@ -500,7 +536,7 @@ def test_transit_to_drop_2_arrived():
     vs = MockVehicleState(lat=F1_LAT, lon=F1_LON, alt_rel=11.0, armed=True, mode='GUIDED')
     state, info = sm.update(vs, 12.0)
     assert state == MissionState.DROP_PAYLOAD_2
-    assert 'servo_release' in info['entry_actions']
+    assert 'arduino_servo_dispense' in info['entry_actions']
 
 
 def _to_drop_payload_2(sm):
@@ -630,7 +666,7 @@ def test_phase_fm3():
     from dbvf_autonomy.mission_state_machine import get_mission_phase
     assert get_mission_phase(MissionState.LAND_WA_DESCEND) == 'FM3'
     assert get_mission_phase(MissionState.WA_DROP_OLD_PAYLOAD) == 'FM3'
-    assert get_mission_phase(MissionState.WA_SERVO_RESET) == 'FM3'
+    assert get_mission_phase(MissionState.WA_PICKUP_READY) == 'FM3'
     assert get_mission_phase(MissionState.LAND_WA_FINAL) == 'FM3'
     assert get_mission_phase(MissionState.DROP_PAYLOAD_2) == 'FM3'
 

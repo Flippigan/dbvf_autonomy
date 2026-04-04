@@ -17,8 +17,9 @@ class MissionState(Enum):
     TRANSIT_TO_WA = 'TRANSIT_TO_WA'
     LAND_WA_DESCEND = 'LAND_WA_DESCEND'
     WA_DROP_OLD_PAYLOAD = 'WA_DROP_OLD_PAYLOAD'
-    WA_SERVO_RESET = 'WA_SERVO_RESET'
+    WA_PICKUP_READY = 'WA_PICKUP_READY'
     LAND_WA_FINAL = 'LAND_WA_FINAL'
+    WA_LOCK_PAYLOAD = 'WA_LOCK_PAYLOAD'
     TAKEOFF_WA = 'TAKEOFF_WA'
     TRANSIT_TO_DROP_2 = 'TRANSIT_TO_DROP_2'
     DROP_PAYLOAD_2 = 'DROP_PAYLOAD_2'
@@ -42,8 +43,9 @@ _STATE_TO_PHASE = {
     MissionState.TRANSIT_TO_WA: 'FM3',
     MissionState.LAND_WA_DESCEND: 'FM3',
     MissionState.WA_DROP_OLD_PAYLOAD: 'FM3',
-    MissionState.WA_SERVO_RESET: 'FM3',
+    MissionState.WA_PICKUP_READY: 'FM3',
     MissionState.LAND_WA_FINAL: 'FM3',
+    MissionState.WA_LOCK_PAYLOAD: 'FM3',
     MissionState.TAKEOFF_WA: 'FM3',
     MissionState.TRANSIT_TO_DROP_2: 'FM3',
     MissionState.DROP_PAYLOAD_2: 'FM3',
@@ -225,7 +227,7 @@ class MissionStateMachine:
             self._drop_start_time = t
             self.state = MissionState.DROP_PAYLOAD
             return self.state, {'action': 'arrived_drop',
-                                'entry_actions': ['servo_release']}
+                                'entry_actions': ['arduino_servo_dispense']}
         entry = []
         if t - self._last_guided_send_time >= self.config['guided_resend_interval_s']:
             entry.append('send_guided_position_drop')
@@ -261,7 +263,7 @@ class MissionStateMachine:
             self.state = MissionState.WA_DROP_OLD_PAYLOAD
             self._wa_drop_start_time = t
             return self.state, {'action': 'descend_offset_reached',
-                                'entry_actions': ['arduino_servo_release']}
+                                'entry_actions': ['arduino_servo_drop']}
         if self._landing_state == 'ABORT_LAND':
             self.state = MissionState.ABORT
             self.abort_reason = 'Precision landing failed at WA'
@@ -271,27 +273,36 @@ class MissionStateMachine:
 
     def _wa_drop_old_payload(self, vs, t):
         elapsed = t - self._wa_drop_start_time
-        if elapsed >= self.config['pickup_settle_time_s']:
+        if elapsed >= self.config['payload_settle_time_s']:
             self._wa_drop_start_time = t
-            self.state = MissionState.WA_SERVO_RESET
+            self.state = MissionState.WA_PICKUP_READY
             return self.state, {'action': 'drop_old_complete',
                                 'entry_actions': ['arduino_servo_pickup']}
         return self.state, {'action': 'dropping_old_payload', 'entry_actions': []}
 
-    def _wa_servo_reset(self, vs, t):
+    def _wa_pickup_ready(self, vs, t):
         elapsed = t - self._wa_drop_start_time
-        if elapsed >= self.config['pickup_settle_time_s']:
+        if elapsed >= self.config['payload_settle_time_s']:
             self.state = MissionState.LAND_WA_FINAL
             return self.state, {'action': 'servo_reset_complete',
                                 'entry_actions': []}
         return self.state, {'action': 'resetting_servo', 'entry_actions': []}
 
-    def _land_wa_final(self, vs, t):
-        if self._landing_state == 'LANDED':
+    def _wa_lock_payload(self, vs, t):
+        elapsed = t - self._wa_drop_start_time
+        if elapsed >= self.config['payload_settle_time_s']:
             self.state = MissionState.TAKEOFF_WA
-            return self.state, {'action': 'landed_wa',
+            return self.state, {'action': 'lock_complete',
                                 'entry_actions': ['set_mode_guided', 'arm',
                                                   'takeoff']}
+        return self.state, {'action': 'locking_payload', 'entry_actions': []}
+
+    def _land_wa_final(self, vs, t):
+        if self._landing_state == 'LANDED':
+            self._wa_drop_start_time = t
+            self.state = MissionState.WA_LOCK_PAYLOAD
+            return self.state, {'action': 'landed_wa',
+                                'entry_actions': ['arduino_servo_lock']}
         if self._landing_state == 'ABORT_LAND':
             self.state = MissionState.ABORT
             self.abort_reason = 'Precision landing failed at WA'
@@ -315,7 +326,7 @@ class MissionStateMachine:
             self._drop_start_time = t
             self.state = MissionState.DROP_PAYLOAD_2
             return self.state, {'action': 'arrived_drop_2',
-                                'entry_actions': ['servo_release']}
+                                'entry_actions': ['arduino_servo_dispense']}
         entry = []
         if t - self._last_guided_send_time >= self.config['guided_resend_interval_s']:
             entry.append('send_guided_position_drop')
@@ -364,7 +375,8 @@ class MissionStateMachine:
         MissionState.TRANSIT_TO_WA: _transit_to_wa,
         MissionState.LAND_WA_DESCEND: _land_wa_descend,
         MissionState.WA_DROP_OLD_PAYLOAD: _wa_drop_old_payload,
-        MissionState.WA_SERVO_RESET: _wa_servo_reset,
+        MissionState.WA_PICKUP_READY: _wa_pickup_ready,
+        MissionState.WA_LOCK_PAYLOAD: _wa_lock_payload,
         MissionState.LAND_WA_FINAL: _land_wa_final,
         MissionState.TAKEOFF_WA: _takeoff_wa,
         MissionState.TRANSIT_TO_DROP_2: _transit_to_drop_2,

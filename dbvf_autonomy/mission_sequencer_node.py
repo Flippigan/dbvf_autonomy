@@ -34,14 +34,14 @@ class MissionSequencerNode(Node):
             'transit_altitude_ft': 35.0,
             'position_tolerance_m': 3.0,
             'takeoff_complete_alt_ft': 33.0,
-            'drop_servo_number': 9,
-            'drop_servo_pwm_release': 1100,
-            'drop_servo_pwm_hold': 1500,
+            'payload_servo_channel': 0,
+            'payload_servo_pwm_hold': 0,
+            'payload_servo_pwm_dispense': 0,
+            'payload_servo_pwm_drop': 0,
+            'payload_servo_pwm_pickup': 0,
+            'payload_servo_pwm_lock': 0,
             'drop_settle_time_s': 2.0,
-            'pickup_servo_number': 1,
-            'pickup_servo_pwm_release': 1100,
-            'pickup_servo_pwm_pickup': 1500,
-            'pickup_settle_time_s': 2.0,
+            'payload_settle_time_s': 2.0,
             'drop_target': 'F1',
             'mission_timeout_s': 540.0,
             'heartbeat_loss_timeout_s': 5.0,
@@ -93,7 +93,6 @@ class MissionSequencerNode(Node):
             SendGuidedPosition, '/dbvf/send_guided_position')
         self.precision_land_cli = self.create_client(
             StartPrecisionLanding, '/dbvf/start_precision_landing')
-        self.servo_cli = self.create_client(DoSetServo, '/dbvf/do_set_servo')
         self.takeoff_cli = self.create_client(Takeoff, '/dbvf/takeoff')
         self.arduino_servo_cli = self.create_client(
             DoSetServo, '/dbvf/arduino/set_servo')
@@ -244,15 +243,18 @@ class MissionSequencerNode(Node):
                 cfg.get('wa_offset_forward', 0.0),
                 cfg.get('wa_offset_right', 0.0),
                 cfg.get('wa_target_yaw', 0.0))
-        elif action == 'servo_release':
-            self._call_set_servo(
-                cfg['drop_servo_number'], cfg['drop_servo_pwm_release'])
-        elif action == 'arduino_servo_release':
+        elif action == 'arduino_servo_dispense':
             self._call_arduino_servo(
-                cfg['pickup_servo_number'], cfg['pickup_servo_pwm_release'])
+                cfg['payload_servo_channel'], cfg['payload_servo_pwm_dispense'])
+        elif action == 'arduino_servo_drop':
+            self._call_arduino_servo(
+                cfg['payload_servo_channel'], cfg['payload_servo_pwm_drop'])
         elif action == 'arduino_servo_pickup':
             self._call_arduino_servo(
-                cfg['pickup_servo_number'], cfg['pickup_servo_pwm_pickup'])
+                cfg['payload_servo_channel'], cfg['payload_servo_pwm_pickup'])
+        elif action == 'arduino_servo_lock':
+            self._call_arduino_servo(
+                cfg['payload_servo_channel'], cfg['payload_servo_pwm_lock'])
 
     # -- Service call helpers -------------------------------------------------
 
@@ -311,17 +313,6 @@ class MissionSequencerNode(Node):
         future = self.precision_land_cli.call_async(req)
         future.add_done_callback(lambda f: self.get_logger().info(
             f'Precision landing: {f.result().message}') if f.result() else None)
-
-    def _call_set_servo(self, servo_number, pwm):
-        if not self.servo_cli.wait_for_service(timeout_sec=1.0):
-            self.get_logger().error('do_set_servo service unavailable')
-            return
-        req = DoSetServo.Request()
-        req.servo_number = servo_number
-        req.pwm = pwm
-        future = self.servo_cli.call_async(req)
-        future.add_done_callback(lambda f: self.get_logger().info(
-            f'Servo: {f.result().message}') if f.result() else None)
 
     def _call_arduino_servo(self, servo_number, pwm):
         if not self.arduino_servo_cli.wait_for_service(timeout_sec=1.0):

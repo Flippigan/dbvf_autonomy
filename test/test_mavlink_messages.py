@@ -3,6 +3,7 @@ from dbvf_autonomy.mavlink_interface_node import (
     RANGE_ALT_SENTINEL,
     VELOCITY_TYPE_MASK,
     build_landing_target_params,
+    build_velocity_type_mask,
     extract_rangefinder_distance,
 )
 
@@ -76,3 +77,56 @@ def test_velocity_frame():
     """MAV_FRAME_BODY_NED is frame 8 — body-relative NED."""
     from pymavlink import mavutil
     assert mavutil.mavlink.MAV_FRAME_BODY_NED == 8
+
+
+# ---------------------------------------------------------------------------
+# build_velocity_type_mask tests (yaw control)
+# ---------------------------------------------------------------------------
+
+def test_build_velocity_type_mask_no_yaw():
+    """No yaw flags → same as legacy VELOCITY_TYPE_MASK (both yaw bits ignored)."""
+    mask = build_velocity_type_mask(use_yaw=False, use_yaw_rate=False)
+    assert mask == VELOCITY_TYPE_MASK
+    # Bit 10 (yaw) should be SET (ignored)
+    assert (mask >> 10) & 1 == 1
+    # Bit 11 (yaw_rate) should be SET (ignored)
+    assert (mask >> 11) & 1 == 1
+
+
+def test_build_velocity_type_mask_yaw_only():
+    """use_yaw=True → bit 10 cleared (use yaw), bit 11 set (ignore yaw_rate)."""
+    mask = build_velocity_type_mask(use_yaw=True, use_yaw_rate=False)
+    # Bit 10 (yaw) should be CLEAR (used)
+    assert (mask >> 10) & 1 == 0
+    # Bit 11 (yaw_rate) should be SET (ignored)
+    assert (mask >> 11) & 1 == 1
+    # Velocity bits still used (bits 3-5 clear)
+    assert (mask >> 3) & 0b111 == 0b000
+    # Position bits still ignored (bits 0-2 set)
+    assert mask & 0b111 == 0b111
+
+
+def test_build_velocity_type_mask_yaw_rate_only():
+    """use_yaw_rate=True → bit 11 cleared (use yaw_rate), bit 10 set (ignore yaw)."""
+    mask = build_velocity_type_mask(use_yaw=False, use_yaw_rate=True)
+    # Bit 10 (yaw) should be SET (ignored)
+    assert (mask >> 10) & 1 == 1
+    # Bit 11 (yaw_rate) should be CLEAR (used)
+    assert (mask >> 11) & 1 == 0
+
+
+def test_build_velocity_type_mask_both():
+    """Both yaw flags → both bits 10 and 11 cleared."""
+    mask = build_velocity_type_mask(use_yaw=True, use_yaw_rate=True)
+    assert (mask >> 10) & 1 == 0
+    assert (mask >> 11) & 1 == 0
+
+
+def test_build_velocity_type_mask_preserves_velocity_bits():
+    """All mask variants preserve velocity bits (3-5 clear) and position bits (0-2 set)."""
+    for uy in (False, True):
+        for uyr in (False, True):
+            mask = build_velocity_type_mask(use_yaw=uy, use_yaw_rate=uyr)
+            assert mask & 0b111 == 0b111, f'Position bits wrong for use_yaw={uy}, use_yaw_rate={uyr}'
+            assert (mask >> 3) & 0b111 == 0b000, f'Velocity bits wrong for use_yaw={uy}, use_yaw_rate={uyr}'
+            assert (mask >> 6) & 0b111 == 0b111, f'Accel bits wrong for use_yaw={uy}, use_yaw_rate={uyr}'

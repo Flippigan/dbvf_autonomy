@@ -1,0 +1,76 @@
+"""Tag visualizer node — draws AprilTag detection overlays on camera images."""
+import cv2
+import numpy as np
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+
+from apriltag_msgs.msg import AprilTagDetectionArray
+
+
+class TagVisualizerNode(Node):
+    def __init__(self):
+        super().__init__('tag_visualizer')
+
+        self.bridge = CvBridge()
+        self.latest_detections = None
+
+        self.create_subscription(
+            Image, '/camera/image', self._image_cb, 10)
+        self.create_subscription(
+            AprilTagDetectionArray, '/apriltag/detections',
+            self._detections_cb, 10)
+
+        self.image_pub = self.create_publisher(
+            Image, '/dbvf/debug/tag_image', 10)
+
+        self.get_logger().info('Tag visualizer started')
+
+    def _detections_cb(self, msg):
+        self.latest_detections = msg
+
+    def _image_cb(self, msg):
+        try:
+            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        except Exception as e:
+            self.get_logger().warn(f'Image conversion failed: {e}')
+            return
+
+        detections = self.latest_detections
+        if detections and detections.detections:
+            for det in detections.detections:
+                # Draw tag outline
+                corners = np.array(
+                    [(int(c.x), int(c.y)) for c in det.corners],
+                    dtype=np.int32)
+                cv2.polylines(frame, [corners], isClosed=True,
+                              color=(0, 255, 0), thickness=2)
+
+                # Draw centre dot
+                cx, cy = int(det.centre.x), int(det.centre.y)
+                cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+
+                # Draw tag ID label
+                label = f'ID:{det.id}'
+                cv2.putText(frame, label,
+                            (corners[0][0], corners[0][1] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                            (0, 255, 0), 2)
+
+        out_msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+        out_msg.header = msg.header
+        self.image_pub.publish(out_msg)
+
+
+def main():
+    rclpy.init()
+    node = TagVisualizerNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

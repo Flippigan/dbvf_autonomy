@@ -242,35 +242,21 @@ def test_global_timeout():
 def test_descend_coarse_to_hold_above_tag():
     """DESCEND_COARSE -> HOLD_ABOVE_TAG when small tag detected for small_tag_confirm_time."""
     sm = LandingStateMachine(CONFIG)
-    _to_descend_coarse(sm)
+    vs = _to_descend_coarse(sm)
 
-    low_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=1.8)
     small_tag = MockTagStatus(detected=True, active_tag_id=2)
     # First detection starts the timer
-    sm.update(low_vs, small_tag, 10.0)
+    sm.update(vs, small_tag, 10.0)
     assert sm.state == LandingState.DESCEND_COARSE
 
     # Not enough time yet
-    sm.update(low_vs, small_tag, 11.0)
+    sm.update(vs, small_tag, 11.0)
     assert sm.state == LandingState.DESCEND_COARSE
 
     # 2.0 seconds of continuous detection → transition
-    state, info = sm.update(low_vs, small_tag, 12.1)
+    state, info = sm.update(vs, small_tag, 12.1)
     assert state == LandingState.HOLD_ABOVE_TAG
     assert info['action'] == 'small_tag_confirmed'
-
-
-def test_descend_coarse_stays_if_above_slow_descent_altitude():
-    """DESCEND_COARSE stays even with confirmed small tag when above slow_descent_altitude (ISS-016)."""
-    sm = LandingStateMachine(CONFIG)
-    _to_descend_coarse(sm)
-
-    high_vs = MockVehicleState(lat=LAT, lon=LON, alt_rel=5.0)
-    small_tag = MockTagStatus(detected=True, active_tag_id=2)
-    # Confirm small tag for well over small_tag_confirm_time at high altitude
-    sm.update(high_vs, small_tag, 10.0)
-    sm.update(high_vs, small_tag, 13.0)  # 3.0s > 2.0s confirm time
-    assert sm.state == LandingState.DESCEND_COARSE  # Still descending, not hovering
 
 
 def test_descend_coarse_floor_with_primary_continues():

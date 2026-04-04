@@ -1,0 +1,4 @@
+source;share/dbvf_autonomy/local_setup.bash
+source;share/dbvf_autonomy/local_setup.dsv
+source;share/dbvf_autonomy/local_setup.sh
+source;share/dbvf_autonomy/local_setup.zsh

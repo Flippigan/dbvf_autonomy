@@ -53,7 +53,7 @@ _REQUIRED_POSITIVE = [
     'service_call_timeout_s',
     'guided_resend_interval_s',
     'drop_settle_time_s',
-    'pickup_settle_time_s',
+    'payload_settle_time_s',
 ]
 
 DEFAULT_MISSION_CONFIG = {
@@ -74,17 +74,19 @@ DEFAULT_MISSION_CONFIG = {
     'position_tolerance_m': 3.0,
     'takeoff_complete_alt_ft': 33.0,
 
-    # Payload servo
-    'drop_servo_number': 9,
-    'drop_servo_pwm_release': 1100,
-    'drop_servo_pwm_hold': 1500,
+    # Payload servo (Arduino + PCA9685)
+    'payload_servo_channel': 0,
+    'payload_servo_pwm_hold': 0,
+    'payload_servo_pwm_dispense': 0,
+    'payload_servo_pwm_drop': 0,
+    'payload_servo_pwm_pickup': 0,
+    'payload_servo_pwm_lock': 0,
     'drop_settle_time_s': 2.0,
+    'payload_settle_time_s': 2.0,
 
-    # WA reload servo (Arduino)
-    'pickup_servo_number': 1,
-    'pickup_servo_pwm_release': 1100,
-    'pickup_servo_pwm_pickup': 1500,
-    'pickup_settle_time_s': 2.0,
+    # WA precision landing offset (camera-to-mechanism)
+    'wa_offset_forward': 0.0,
+    'wa_offset_right': 0.0,
 
     # Drop zone target
     'drop_target': 'F1',

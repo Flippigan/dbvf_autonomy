@@ -31,9 +31,12 @@ Wait for the drone to reach ~10m altitude and stabilize.
 
 ### Terminal 4 (or same as 3): Trigger the Landing
 ```bash
-ros2 service call /dbvf/start_precision_landing dbvf_msgs/srv/StartPrecisionLanding "{target_lat: -35.3632531, target_lon: 149.1657896}"
+ros2 service call /dbvf/start_precision_landing dbvf_msgs/srv/StartPrecisionLanding \
+  "{target_lat: -35.3632531, target_lon: 149.1657896, offset_forward: 0.0, offset_right: 0.0}"
 ```
 **This is the trigger.** Without this service call, the system sits in IDLE forever.
+
+The `offset_forward` and `offset_right` fields are optional (default 0.0). They shift the landing target so a point other than the camera center ends up over the tag — used for WA landings where the reload mechanism is offset from the camera.
 
 The target coordinates are the GPS location of the AprilTag pad in `iris_runway.sdf` (tag at Gazebo pose `50.0, 1.0`).
 
@@ -279,6 +282,8 @@ The YAML is installed to `install/dbvf_autonomy/share/` during build. The launch
 | `drop_servo_pwm_release` | 1100 | PWM value to release payload |
 | `drop_servo_pwm_hold` | 1500 | PWM value to hold payload |
 | `drop_settle_time_s` | 2.0 | Time to wait after servo actuation |
+| `wa_offset_forward` | 0.0 | Camera-to-mechanism forward offset (metres) for WA landing |
+| `wa_offset_right` | 0.0 | Camera-to-mechanism right offset (metres) for WA landing |
 | `drop_target` | "F1" | Which drop zone to use ("F1" or "F2") |
 | `mission_timeout_s` | 540.0 | Total mission timeout (9 minutes) |
 | `prefer_rangefinder` | true | Use rangefinder altitude if available |

@@ -1,0 +1,3 @@
+#!/usr/bin/env python3
+from dbvf_autonomy.csi_camera_node import main
+main()

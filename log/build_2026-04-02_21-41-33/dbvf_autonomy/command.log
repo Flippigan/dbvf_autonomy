@@ -1,0 +1,4 @@
+Invoking command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy -- -j16 -l16
+Invoked command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy -- -j16 -l16
+Invoking command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy
+Invoked command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy

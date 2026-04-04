@@ -1,0 +1,103 @@
+[0.007s] Invoking command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/finn/Documents/ardu_ws/src/dbvf_autonomy -DCMAKE_INSTALL_PREFIX=/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy
+[0.067s] -- The C compiler identification is GNU 11.4.0
+[0.115s] -- The CXX compiler identification is GNU 11.4.0
+[0.121s] -- Detecting C compiler ABI info
+[0.183s] -- Detecting C compiler ABI info - done
+[0.187s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.189s] -- Detecting C compile features
+[0.190s] -- Detecting C compile features - done
+[0.192s] -- Detecting CXX compiler ABI info
+[0.260s] -- Detecting CXX compiler ABI info - done
+[0.265s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.265s] -- Detecting CXX compile features
+[0.265s] -- Detecting CXX compile features - done
+[0.267s] -- Found ament_cmake_python: 1.3.11 (/opt/ros/humble/share/ament_cmake_python/cmake)
+[0.268s] -- Found std_msgs: 4.2.4 (/opt/ros/humble/share/std_msgs/cmake)
+[0.492s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[0.578s] -- Found rosidl_generator_c: 3.1.6 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[0.583s] -- Found rosidl_adapter: 3.1.6 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[0.588s] -- Found rosidl_generator_cpp: 3.1.6 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[0.595s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.605s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.620s] -- Found geometry_msgs: 4.2.4 (/opt/ros/humble/share/geometry_msgs/cmake)
+[0.683s] -- Found ament_cmake_pytest: 1.3.11 (/opt/ros/humble/share/ament_cmake_pytest/cmake)
+[3.885s] -- Configuring done
+[3.888s] -- Generating done
+[3.890s] -- Build files have been written to: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy
+[3.896s] Invoked command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/finn/Documents/ardu_ws/src/dbvf_autonomy -DCMAKE_INSTALL_PREFIX=/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy
+[3.898s] Invoking command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy -- -j16 -l16
+[3.950s] Built target ament_cmake_python_copy_dbvf_autonomy
+[4.070s] running egg_info
+[4.078s] creating dbvf_autonomy.egg-info
+[4.079s] writing dbvf_autonomy.egg-info/PKG-INFO
+[4.079s] writing dependency_links to dbvf_autonomy.egg-info/dependency_links.txt
+[4.079s] writing top-level names to dbvf_autonomy.egg-info/top_level.txt
+[4.079s] writing manifest file 'dbvf_autonomy.egg-info/SOURCES.txt'
+[4.104s] reading manifest file 'dbvf_autonomy.egg-info/SOURCES.txt'
+[4.104s] writing manifest file 'dbvf_autonomy.egg-info/SOURCES.txt'
+[4.125s] Built target ament_cmake_python_build_dbvf_autonomy_egg
+[4.136s] Invoked command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy -- -j16 -l16
+[4.145s] Invoking command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy
+[4.150s] -- Install configuration: ""
+[4.151s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/environment/pythonpath.sh
+[4.151s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/environment/pythonpath.dsv
+[4.151s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy-0.0.1-py3.10.egg-info
+[4.151s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy-0.0.1-py3.10.egg-info/PKG-INFO
+[4.151s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy-0.0.1-py3.10.egg-info/top_level.txt
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy-0.0.1-py3.10.egg-info/SOURCES.txt
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy-0.0.1-py3.10.egg-info/dependency_links.txt
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/csi_camera_node.py
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/tag_detector_adapter_node.py
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/__init__.py
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/mavlink_interface_node.py
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/tag_visualizer_node.py
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/mission_sequencer_node.py
+[4.152s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/precision_landing_node.py
+[4.153s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/mission_state_machine.py
+[4.153s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/arduino_interface_node.py
+[4.153s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/mission_helpers.py
+[4.182s] Listing '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy'...
+[4.182s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/__init__.py'...
+[4.182s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/arduino_interface_node.py'...
+[4.182s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/csi_camera_node.py'...
+[4.182s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/mavlink_interface_node.py'...
+[4.183s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/mission_helpers.py'...
+[4.183s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/mission_sequencer_node.py'...
+[4.183s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/mission_state_machine.py'...
+[4.183s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/precision_landing_node.py'...
+[4.183s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/tag_detector_adapter_node.py'...
+[4.183s] Compiling '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/local/lib/python3.10/dist-packages/dbvf_autonomy/tag_visualizer_node.py'...
+[4.185s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/launch
+[4.185s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/launch/precision_landing_sim.launch.py
+[4.185s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/launch/precision_landing_real.launch.py
+[4.186s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/launch/mission_sim.launch.py
+[4.186s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/launch/mission_real.launch.py
+[4.186s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/config
+[4.186s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/config/jetson_params.yaml
+[4.186s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/config/mission_params.yaml
+[4.186s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/config/hardware_params.yaml
+[4.186s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/config/sim_params.yaml
+[4.187s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/lib/dbvf_autonomy/mavlink_interface_node
+[4.187s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/lib/dbvf_autonomy/tag_detector_adapter_node
+[4.187s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/lib/dbvf_autonomy/precision_landing_node
+[4.187s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/lib/dbvf_autonomy/tag_visualizer_node
+[4.187s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/lib/dbvf_autonomy/mission_sequencer_node
+[4.187s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/lib/dbvf_autonomy/arduino_interface_node
+[4.187s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/lib/dbvf_autonomy/csi_camera_node
+[4.187s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/ament_index/resource_index/package_run_dependencies/dbvf_autonomy
+[4.188s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/ament_index/resource_index/parent_prefix_path/dbvf_autonomy
+[4.188s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/environment/ament_prefix_path.sh
+[4.188s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/environment/ament_prefix_path.dsv
+[4.188s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/environment/path.sh
+[4.188s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/environment/path.dsv
+[4.188s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/local_setup.bash
+[4.188s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/local_setup.sh
+[4.188s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/local_setup.zsh
+[4.189s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/local_setup.dsv
+[4.189s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/package.dsv
+[4.189s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/ament_index/resource_index/packages/dbvf_autonomy
+[4.189s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/cmake/dbvf_autonomyConfig.cmake
+[4.189s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/cmake/dbvf_autonomyConfig-version.cmake
+[4.189s] -- Installing: /home/finn/Documents/ardu_ws/src/dbvf_autonomy/install/dbvf_autonomy/share/dbvf_autonomy/package.xml
+[4.191s] Invoked command in '/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy

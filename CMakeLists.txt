@@ -24,6 +24,8 @@ install(PROGRAMS
   scripts/tag_visualizer_node
   scripts/mission_sequencer_node
   scripts/arduino_interface_node
+  scripts/csi_camera_node
+  scripts/servo_test_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -44,6 +46,7 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_mission_fsm test/test_mission_state_machine.py)
   ament_add_pytest_test(test_rc_trigger test/test_rc_trigger.py)
   ament_add_pytest_test(test_arduino test/test_arduino_interface.py)
+  ament_add_pytest_test(test_connection test/test_connection_string.py)
 endif()
 
 ament_package()

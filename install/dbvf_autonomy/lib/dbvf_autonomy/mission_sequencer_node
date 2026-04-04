@@ -1,0 +1,3 @@
+#!/usr/bin/env python3
+from dbvf_autonomy.mission_sequencer_node import main
+main()

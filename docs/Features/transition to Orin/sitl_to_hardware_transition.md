@@ -410,13 +410,44 @@ Before any flight, verify the full stack on the bench with props removed:
 3. Move the tag **forward** — `angle_y` should be **negative** (ahead of center)
 4. If directions are wrong, adjust `cam_body_x/y/z_from` in `jetson_params.yaml`
 
-### Servo Actuation
+### Servo Actuation (Interactive Test Tool)
+
+Use the dedicated servo test tool to exercise all mission servo phases through the **exact same ROS2 service path** used during competition (`/dbvf/arduino/set_servo` → Arduino Interface Node → USB serial → Arduino Nano → servo).
 
 ```bash
-ros2 service call /dbvf/do_set_servo dbvf_msgs/srv/DoSetServo \
-  "{servo_number: 9, pwm: 1100}"    # Release position
-ros2 service call /dbvf/do_set_servo dbvf_msgs/srv/DoSetServo \
-  "{servo_number: 9, pwm: 1500}"    # Hold position
+# Terminal 1: Start Arduino interface (owns /dev/ttyACM0)
+ros2 launch dbvf_autonomy servo_test.launch.py
+
+# Terminal 2: Run interactive test (loads PWM values from mission_params.yaml)
+ros2 run dbvf_autonomy servo_test_node --ros-args \
+    --params-file install/dbvf_autonomy/share/dbvf_autonomy/config/mission_params.yaml
+```
+
+The menu presents the 5 competition servo phases in order:
+
+| # | Mission Phase | Config Key | Default PWM |
+|---|---------------|-----------|-------------|
+| 1 | DROP_PAYLOAD — Dispense red payload at F1/F2 | `payload_servo_pwm_dispense` | 0 (needs calibration) |
+| 2 | WA_DROP_OLD — Drop old payload cradle at WA | `payload_servo_pwm_drop` | 0 (needs calibration) |
+| 3 | WA_PICKUP_READY — Open for crew loading | `payload_servo_pwm_pickup` | 0 (needs calibration) |
+| 4 | WA_LOCK_PAYLOAD — Lock new yellow payload | `payload_servo_pwm_lock` | 0 (needs calibration) |
+| 5 | DROP_PAYLOAD_2 — Dispense yellow payload at F1/F2 | `payload_servo_pwm_dispense` | 0 (needs calibration) |
+
+Additional commands:
+- **`a`** — Run all 5 phases sequentially with 2s settle time (matches competition timing)
+- **`c`** — Custom channel + PWM for manual calibration
+- **`q`** — Quit
+
+When a PWM value is 0 (uncalibrated), the tool prompts for a PWM override before sending. Use this to find the correct values, then update `src/dbvf_autonomy/config/mission_params.yaml` (lines 44-49) so both this tool and the competition mission use the same calibrated values.
+
+#### Quick ad-hoc servo test (without the test tool)
+
+If you just need to send a single command:
+
+```bash
+# Ensure arduino_interface_node is running, then:
+ros2 service call /dbvf/arduino/set_servo dbvf_msgs/srv/DoSetServo \
+  "{servo_number: 0, pwm: 1500}"
 ```
 
 ### Mode Switching and Arming
@@ -430,6 +461,75 @@ ros2 service call /dbvf/set_mode dbvf_msgs/srv/SetMode "{mode: 'GUIDED'}"
 ros2 service call /dbvf/arm_motors dbvf_msgs/srv/ArmMotors "{arm: true}"
 # May need to disable pre-arm checks or satisfy them all first
 ```
+
+---
+
+## Servo Hardware Architecture
+
+### Signal Flow
+
+The mission triggers and servo actuation are **two separate paths**:
+
+```
+┌─────────────────── MISSION TRIGGER PATH ───────────────────┐
+│                                                             │
+│  Radio TX (ch14 high)                                       │
+│      ↓                                                      │
+│  Cube Orange (encodes RC_CHANNELS MAVLink msg)              │
+│      ↓ UART (/dev/ttyTHS1 @ 921600)                        │
+│  mavlink_interface_node (rising-edge on ch14 ≥ 1700 PWM)   │
+│      ↓ ROS2 service call                                    │
+│  mission_sequencer_node (transitions IDLE → PREFLIGHT...)   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────── SERVO ACTUATION PATH ───────────────────┐
+│                                                             │
+│  mission_sequencer_node (enters servo state, e.g.           │
+│      DROP_PAYLOAD → entry_action: arduino_servo_dispense)   │
+│      ↓ ROS2 service: /dbvf/arduino/set_servo                │
+│  arduino_interface_node (formats "S0:<pwm>\n")              │
+│      ↓ USB serial (/dev/ttyACM0 @ 115200)                  │
+│  Arduino Nano (payload_servo_controller.ino)                │
+│      ↓ Pin D9 PWM                                           │
+│  Servo actuator                                             │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key point:** The Cube Orange / radio RX triggers the mission start, but does **not** drive payload servos. The Jetson talks directly to the Arduino Nano over USB serial for all servo operations.
+
+### Two Servo Service Paths (only one used in competition)
+
+| Service | Transport | Hardware | Used by Mission? |
+|---------|-----------|----------|-----------------|
+| `/dbvf/arduino/set_servo` | USB serial → Arduino Nano | Payload servo on pin D9 | **Yes** — all 5 servo phases |
+| `/dbvf/do_set_servo` | MAVLink → Cube Orange | FC auxiliary outputs | No — available for testing |
+
+### Servo Configuration
+
+All PWM values are in `config/mission_params.yaml` under `mission_sequencer.ros__parameters`:
+
+```yaml
+payload_servo_channel: 0            # Arduino channel
+payload_servo_pwm_hold: 0           # Pre-loaded hold (TBD)
+payload_servo_pwm_dispense: 0       # Release payload
+payload_servo_pwm_drop: 0           # Drop old cradle at WA
+payload_servo_pwm_pickup: 0         # Open for crew loading
+payload_servo_pwm_lock: 0           # Lock new payload
+drop_settle_time_s: 2.0             # Wait after dispense
+payload_settle_time_s: 2.0          # Wait after drop/pickup/lock
+```
+
+**All values are currently 0 and need calibration on the physical mechanism.** Use the servo test tool (Section 10) to find correct PWM values.
+
+### Arduino Hardware
+
+- **Firmware:** `src/dbvf_autonomy/arduino/payload_servo_controller/payload_servo_controller.ino`
+- **Protocol:** `S<channel>:<pwm_us>\n` → `OK\n` or `ERR:<msg>\n`
+- **Servo pin:** D9 (PWM-capable)
+- **Power:** External 5-6V supply (not Arduino 5V pin — servo draws too much current)
+- **USB device:** `/dev/ttyACM0` @ 115200 baud
 
 ---
 

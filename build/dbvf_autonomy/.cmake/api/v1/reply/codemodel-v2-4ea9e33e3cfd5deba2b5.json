@@ -1,0 +1,88 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-7938efcb3deec155543f.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3
+					]
+				}
+			],
+			"name" : "",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "dbvf_autonomy",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "ament_cmake_python_build_dbvf_autonomy_egg::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ament_cmake_python_build_dbvf_autonomy_egg-fc2151ceecdafc9320d9.json",
+					"name" : "ament_cmake_python_build_dbvf_autonomy_egg",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ament_cmake_python_copy_dbvf_autonomy::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ament_cmake_python_copy_dbvf_autonomy-60454b6d3f9fe8d095dd.json",
+					"name" : "ament_cmake_python_copy_dbvf_autonomy",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "dbvf_autonomy_uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-dbvf_autonomy_uninstall-eda591f6815794a9b370.json",
+					"name" : "dbvf_autonomy_uninstall",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-uninstall-bc7ba7575018a3132cd0.json",
+					"name" : "uninstall",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/finn/Documents/ardu_ws/src/dbvf_autonomy/build/dbvf_autonomy",
+		"source" : "/home/finn/Documents/ardu_ws/src/dbvf_autonomy"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}

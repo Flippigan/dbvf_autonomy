@@ -1,0 +1,3 @@
+#!/usr/bin/env python3
+from dbvf_autonomy.servo_test_node import main
+main()

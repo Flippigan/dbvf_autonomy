@@ -203,17 +203,11 @@ class LandingStateMachine:
                               and tag_status.active_tag_id == self.config.get('secondary_tag_id', 1))
 
         # Track small tag continuous detection.
-        # Only transition to OFFSET_LATERAL when BOTH conditions are met:
-        #   1. Small tag confirmed for small_tag_confirm_time
-        #   2. Drone is at or below slow_descent_altitude (fine-positioning altitude)
-        # This keeps the drone descending during the initial approach and only
-        # pauses for fine positioning near the ground (ISS-016).
         if small_tag_detected:
             if self.small_tag_first_seen is None:
                 self.small_tag_first_seen = current_time
             elif (current_time - self.small_tag_first_seen
-                  >= self.config['small_tag_confirm_time']
-                  and vs.alt_rel <= self.config.get('slow_descent_altitude', 2.0)):
+                  >= self.config['small_tag_confirm_time']):
                 self.state = LandingState.HOLD_ABOVE_TAG
                 self.small_tag_first_seen = None
                 return self.state, {'action': 'small_tag_confirmed'}

@@ -21,6 +21,7 @@ Step-by-step guide for operating the autonomy stack at the VFS DBVF competition.
    - Replace `f1_lat` / `f1_lon` → Fire 1 (F1) coordinates
    - Replace `f2_lat` / `f2_lon` → Fire 2 (F2) coordinates
    - Set `drop_target` → `"F1"` or `"F2"` based on team strategy
+   - Set `wa_offset_forward` / `wa_offset_right` → camera-to-mechanism offset (see §8)
 5. Verify coordinates:
    ```bash
    grep -E 'lat|lon' mission_params.yaml
@@ -71,7 +72,7 @@ Step-by-step guide for operating the autonomy stack at the VFS DBVF competition.
 | FM-2 Transit | Drone flies to F1 or F2 | Observe horizontal flight | ~10-20s |
 | FM-2 Drop | Servo releases red payload | Observe payload release | ~2s |
 | FM-3 Transit | Drone flies to WA | Observe horizontal flight | ~10s |
-| FM-3 Land | Precision landing on AprilTag at WA | Observe slow descent | ~30s |
+| FM-3 Land | Precision landing on AprilTag at WA (with camera-to-mechanism offset) | Observe slow descent | ~30s |
 | FM-3 Takeoff | Drone climbs from WA to 35ft | Observe vertical climb | ~10s |
 | FM-3 Drop | Servo releases yellow payload at F1/F2 | Observe payload release | ~2s |
 | RTH | Drone flies back to H | Observe horizontal flight | ~10-20s |
@@ -139,3 +140,32 @@ ros2 topic echo /dbvf/tag_status
 # Precision landing state (during WA landing)
 ros2 topic echo /dbvf/landing_state
 ```
+
+---
+
+## 8. WA Precision Landing Offset (Camera-to-Mechanism)
+
+The PiCam is mounted forward of center on the drone. During WA precision landing, the drone needs to position the **reload mechanism** (not the camera) over the AprilTag. The `wa_offset_forward` and `wa_offset_right` parameters in `mission_params.yaml` tell the landing system how far the mechanism is from the camera.
+
+### How to Measure
+
+1. Place drone on a flat, level surface.
+2. Mark a point directly below the **center of the PiCam lens** on the surface.
+3. Mark a point directly below the **center of the reload mechanism**.
+4. Measure the **forward/backward** distance between marks (along the drone's nose-tail axis).
+   - If the mechanism is **behind** the camera mark → **positive** value.
+5. Measure the **left/right** distance between marks (perpendicular to nose-tail).
+   - If the mechanism is **to the right** of the camera mark → **positive** value.
+6. Convert inches to metres (divide by 39.37) and enter into `mission_params.yaml`:
+   ```yaml
+   wa_offset_forward: 0.12   # example: mechanism is 12cm behind camera
+   wa_offset_right: 0.0      # example: mechanism is centered left-right
+   ```
+
+### Expected Values
+
+For the current hardware layout (PiCam forward, mechanism at center):
+- `wa_offset_forward` ≈ 0.10–0.15m
+- `wa_offset_right` ≈ 0.0m
+
+These offsets are only applied during WA landings. All other landings (L, H) use (0.0, 0.0) — camera centered over target.

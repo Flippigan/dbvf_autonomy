@@ -1,0 +1,62 @@
+mavlink_interface:
+  ros__parameters:
+    connection_string: "udpin:0.0.0.0:14551"
+    source_system: 255
+    source_component: 0
+    heartbeat_rate: 1.0
+    vehicle_state_rate: 10.0
+
+tag_detector_adapter:
+  ros__parameters:
+    primary_tag_id: 1
+    secondary_tag_id: 2
+    primary_tag_size: 0.15
+    secondary_tag_size: 0.05
+    debounce_buffer_size: 30
+    debounce_threshold: 0.8
+    detection_topic: "/apriltag/detections"
+    cam_body_x_from: "-y"
+    cam_body_y_from: "x"
+    cam_body_z_from: "z"
+
+precision_landing:
+  ros__parameters:
+    # Existing
+    approach_altitude: 8.0
+    min_search_altitude: 1.0
+    search_descent_rate: 0.3
+    position_tolerance: 2.0
+    tag_confirm_frames: 5
+    tag_lost_timeout: 4.0
+    landing_timeout: 60.0
+
+    # Descent phases
+    descend_floor_altitude: 1.5
+    final_descent_rate: 0.15
+
+    # Small tag detection
+    small_tag_confirm_time: 2.0
+    secondary_tag_id: 2
+
+    # Offset tolerance (offsets are now per-landing via service request)
+    offset_tolerance: 0.05
+
+    # Small tag search pattern
+    small_tag_search_radius: 0.5
+    small_tag_search_speed: 0.2
+
+    # Slow descent near ground (ISS-011)
+    slow_descent_altitude: 2.0   # Rangefinder threshold (meters AGL)
+    slow_descent_rate: 0.1       # Max descent rate below threshold (m/s)
+
+    # Visual servo PID
+    servo_pid_p: 0.5
+    servo_pid_i: 0.0
+    servo_pid_d: 0.1
+    servo_max_speed: 0.5
+
+arduino_interface:
+  ros__parameters:
+    serial_port: "/dev/ttyACM0"
+    baud_rate: 115200
+    serial_timeout_s: 1.0

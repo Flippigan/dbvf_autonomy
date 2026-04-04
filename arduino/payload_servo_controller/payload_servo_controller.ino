@@ -3,13 +3,13 @@
 // Protocol: S<channel>:<pwm_us>\n -> OK\n or ERR:<reason>\n
 // Identical to arduino_interface_node protocol.
 //
-// Hardware: single servo on pin D9 (channel 0).
+// Hardware: single servo on pin D10 (channel 0).
 // Replaces previous PCA9685 I2C approach — same protocol, simpler wiring.
 
 #include <Servo.h>
 
 static const unsigned long BAUD_RATE = 115200;
-static const int SERVO_PIN = 9;
+static const int SERVO_PIN = 10;
 
 Servo payloadServo;
 

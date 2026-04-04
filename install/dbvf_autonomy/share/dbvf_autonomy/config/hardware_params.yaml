@@ -1,0 +1,71 @@
+# Hardware parameters for Jetson Orin Nano + Cube Orange.
+# Loaded by mission_real.launch.py / precision_landing_real.launch.py.
+# Self-contained: includes all parameters that sim_params.yaml provides.
+
+mavlink_interface:
+  ros__parameters:
+    # MAVLink connection
+    connection_type: "serial"           # "serial", "tcp", or "udp"
+    serial_device: "/dev/ttyTHS1"
+    serial_baud: 921600
+    tcp_host: "127.0.0.1"
+    tcp_port: 5762
+    udp_host: "127.0.0.1"
+    udp_port: 14550
+    source_system: 255
+    source_component: 0
+    heartbeat_rate: 1.0
+    vehicle_state_rate: 10.0
+
+tag_detector_adapter:
+  ros__parameters:
+    primary_tag_id: 1
+    secondary_tag_id: 2
+    primary_tag_size: 0.15
+    secondary_tag_size: 0.05
+    debounce_buffer_size: 30
+    debounce_threshold: 0.8
+    detection_topic: "/apriltag/detections"
+    cam_body_x_from: "-y"
+    cam_body_y_from: "x"
+    cam_body_z_from: "z"
+
+precision_landing:
+  ros__parameters:
+    approach_altitude: 8.0
+    min_search_altitude: 1.0
+    search_descent_rate: 0.3
+    position_tolerance: 2.0
+    tag_confirm_frames: 5
+    tag_lost_timeout: 4.0
+    landing_timeout: 60.0
+    descend_floor_altitude: 1.5
+    final_descent_rate: 0.15
+    small_tag_confirm_time: 2.0
+    secondary_tag_id: 2
+    offset_forward: 0.0
+    offset_right: 0.0
+    offset_tolerance: 0.05
+    small_tag_search_radius: 0.5
+    small_tag_search_speed: 0.2
+    slow_descent_altitude: 2.0
+    slow_descent_rate: 0.1
+    servo_pid_p: 0.5
+    servo_pid_i: 0.0
+    servo_pid_d: 0.1
+    servo_max_speed: 0.5
+
+arduino_interface:
+  ros__parameters:
+    serial_port: "/dev/ttyACM0"
+    baud_rate: 115200
+    serial_timeout_s: 1.0
+
+camera:
+  ros__parameters:
+    type: "csi"
+    sensor_id: 0
+    width: 1280
+    height: 720
+    framerate: 30
+    camera_info_url: "file:///home/finn/ardu_ws/src/dbvf_autonomy/config/imx219_calibration.yaml"
