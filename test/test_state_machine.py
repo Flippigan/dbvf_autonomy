@@ -591,9 +591,11 @@ def test_velocity_servo_accepts_correct_tag_in_offset():
 # Preferred tag publish tests (ISS-012 circular dependency fix)
 # ---------------------------------------------------------------------------
 
-def _compute_preferred_tag(state, range_alt, slow_descent_altitude):
+def _compute_preferred_tag(state, range_alt, slow_descent_altitude, alt_rel=None):
     """Replicates the preferred tag publish logic from _control_loop."""
     from dbvf_autonomy.precision_landing_node import compute_preferred_tag_id
+    if alt_rel is not None:
+        return compute_preferred_tag_id(state, range_alt, slow_descent_altitude, alt_rel=alt_rel)
     return compute_preferred_tag_id(state, range_alt, slow_descent_altitude)
 
 
@@ -630,6 +632,34 @@ def test_preferred_tag_secondary_during_align_yaw():
 def test_preferred_tag_secondary_during_offset_lateral():
     """OFFSET_LATERAL → preferred=2 (secondary)."""
     result = _compute_preferred_tag(LandingState.OFFSET_LATERAL, 1.5, 2.0)
+    assert result == 2
+
+
+# ---------------------------------------------------------------------------
+# ISS-017: alt_rel fallback in compute_preferred_tag_id
+# ---------------------------------------------------------------------------
+
+def test_preferred_tag_secondary_with_sentinel_range_alt_and_low_alt_rel():
+    """DESCEND_COARSE with range_alt=-1.0 (sentinel) + alt_rel=1.5 (below 2.0m) → preferred=2."""
+    result = _compute_preferred_tag(LandingState.DESCEND_COARSE, -1.0, 2.0, alt_rel=1.5)
+    assert result == 2
+
+
+def test_preferred_tag_primary_with_sentinel_range_alt_and_high_alt_rel():
+    """DESCEND_COARSE with range_alt=-1.0 (sentinel) + alt_rel=5.0 (above 2.0m) → preferred=1."""
+    result = _compute_preferred_tag(LandingState.DESCEND_COARSE, -1.0, 2.0, alt_rel=5.0)
+    assert result == 1
+
+
+def test_preferred_tag_primary_with_sentinel_both_alts():
+    """DESCEND_COARSE with range_alt=-1.0 + alt_rel=-1.0 (both sentinel) → preferred=1."""
+    result = _compute_preferred_tag(LandingState.DESCEND_COARSE, -1.0, 2.0, alt_rel=-1.0)
+    assert result == 1
+
+
+def test_preferred_tag_range_alt_preferred_over_alt_rel():
+    """DESCEND_COARSE with valid range_alt=1.8 uses range_alt, not alt_rel=5.0."""
+    result = _compute_preferred_tag(LandingState.DESCEND_COARSE, 1.8, 2.0, alt_rel=5.0)
     assert result == 2
 
 
