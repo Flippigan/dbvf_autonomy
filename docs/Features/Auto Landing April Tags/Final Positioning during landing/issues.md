@@ -294,7 +294,7 @@ Two-pronged fix:
 ## ISS-018: 4-phase landing still not entered after ISS-017 fix
 
 **Date:** 2026-04-05
-**Status:** Open — root cause identified (stale launch config + small tag)
+**Status:** FIXED (2026-04-05)
 **Related:** ISS-017 (fix applied but symptom persists)
 
 ### Symptom
@@ -374,3 +374,17 @@ secondary_tag_id: 2
 
 - **ISS-017** (range_alt fallback): ISS-017 fix is correct and verified working (range_alt is now valid). But the symptom persists because tag 2 is never detected — a separate issue.
 - **ISS-013** (4-phase landing): The 4-phase sequence would work IF tag 2 were detected. This issue blocks entry.
+
+### Resolution (2026-04-05)
+
+All config and model files updated to agree on: primary tag = ID 1 @ 0.15m, secondary tag = ID 2 @ 0.10m.
+
+| File | Before | After |
+|------|--------|-------|
+| `launch/precision_landing_sim.launch.py` | `tag.ids: [0, 1]`, `tag.sizes: [0.6, 0.15]` | `tag.ids: [1, 2]`, `tag.sizes: [0.15, 0.10]` |
+| `config/sim_params.yaml` | `secondary_tag_size: 0.05` | `secondary_tag_size: 0.10` |
+| `config/hardware_params.yaml` | `secondary_tag_size: 0.05` | `secondary_tag_size: 0.10` |
+| `config/jetson_params.yaml` | `primary_tag_id: 0`, `secondary_tag_id: 1`, sizes 0.6/0.15 | IDs 1/2, sizes 0.15/0.10 |
+| `models/Apriltag36_11_00002/model.sdf` | `0.05 0.05 0.001` | `0.10 0.10 0.001` |
+
+Additional find: `hardware_params.yaml` had the same `secondary_tag_size: 0.05` stale value — included in fix.
