@@ -82,16 +82,23 @@ class LandingState(Enum):
 
 
 def compute_preferred_tag_id(state, range_alt, slow_descent_altitude,
-                             primary_tag_id=1, secondary_tag_id=2):
-    """Return the preferred tag ID for adapter coordination."""
+                             primary_tag_id=1, secondary_tag_id=2,
+                             alt_rel=-1.0):
+    """Return the preferred tag ID for adapter coordination.
+
+    During DESCEND_COARSE, switches to secondary tag when altitude is at or
+    below slow_descent_altitude. Prefers range_alt (rangefinder) when valid;
+    falls back to alt_rel (barometric) when range_alt is sentinel (-1.0).
+    """
     if state in (LandingState.HOLD_ABOVE_TAG, LandingState.ALIGN_YAW,
                  LandingState.OFFSET_LATERAL,
                  LandingState.DESCEND_FINAL, LandingState.SMALL_TAG_SEARCH):
         return secondary_tag_id
-    if (state == LandingState.DESCEND_COARSE
-            and range_alt >= 0.0
-            and range_alt <= slow_descent_altitude):
-        return secondary_tag_id
+    if state == LandingState.DESCEND_COARSE:
+        # Prefer rangefinder; fall back to barometric altitude
+        effective_alt = range_alt if range_alt >= 0.0 else alt_rel
+        if effective_alt >= 0.0 and effective_alt <= slow_descent_altitude:
+            return secondary_tag_id
     return primary_tag_id
 
 
@@ -648,7 +655,8 @@ class PrecisionLandingNode(Node):
         preferred.data = compute_preferred_tag_id(
             state, vs.range_alt, self._slow_descent_altitude,
             primary_tag_id=self.fsm.config['primary_tag_id'],
-            secondary_tag_id=self.fsm.config['secondary_tag_id'])
+            secondary_tag_id=self.fsm.config['secondary_tag_id'],
+            alt_rel=vs.alt_rel)
         self.preferred_tag_pub.publish(preferred)
 
         # Publish current state
