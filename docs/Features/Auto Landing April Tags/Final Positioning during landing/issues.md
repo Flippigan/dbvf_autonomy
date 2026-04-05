@@ -89,7 +89,7 @@ Full trace: `docs/superpowers/Log/ISS-014-body-frame-yaw-spin.md`
 ## ISS-015: No tag-relative yaw — drone cannot orient itself relative to the landing pad
 
 **Date:** 2026-04-02
-**Status:** Open — enhancement opportunity
+**Status:** IMPLEMENTED — tag_yaw extraction and publishing (2026-04-03). Active yaw alignment in precision_landing_node is ISS-013.
 
 ### Problem
 
@@ -189,3 +189,101 @@ The 4-phase hold/align/offset/descend sequence (ISS-013) is intentionally paused
 
 - **ISS-013** (4-phase final approach, IMPLEMENTED): The ALIGN_YAW phase is already implemented and auto-skips when `tag_yaw` is unavailable. Once ISS-015 adds the field, yaw alignment activates automatically via `getattr(target, 'tag_yaw', None)` in `_velocity_servo()`.
 - **ISS-014** (yaw spin, FIXED): The `yaw=0.0` fix is a safe workaround; tag-relative yaw would be the proper solution that also enables orientation control
+
+---
+
+## ISS-017: Offsets have no effect — 4-phase landing never entered due to range_alt sentinel
+
+**Date:** 2026-04-05
+**Status:** FIXED
+**Implementation plan:** `docs/superpowers/plans/2026-04-05-iss017-rangefinder-alt-fallback.md`
+
+### Symptom
+
+Setting `offset_forward` and `offset_right` to non-zero values (e.g., 10.0m each) in the `StartPrecisionLanding` service call has no effect on where the drone lands. The drone lands directly on the tag center regardless of offset values. The secondary tag IS visible in the debug camera view.
+
+### Root Cause
+
+`compute_preferred_tag_id()` (`precision_landing_node.py:84-95`) controls when the adapter switches from reporting the primary tag to the secondary tag. During DESCEND_COARSE, it only switches to secondary when:
+
+```python
+if (state == LandingState.DESCEND_COARSE
+        and range_alt >= 0.0
+        and range_alt <= slow_descent_altitude):   # 2.0m
+    return secondary_tag_id
+return primary_tag_id
+```
+
+`range_alt` initializes to **-1.0** (sentinel, `mavlink_interface_node.py:27,137`) and only updates when a `RANGEFINDER` MAVLink message arrives from ArduPilot. If RANGEFINDER messages are not received (e.g., SITL stream rates not configured, or MAVProxy not forwarding), `range_alt` stays -1.0 for the entire flight.
+
+**Chain of failure:**
+
+| Step | What happens |
+|------|-------------|
+| 1 | `range_alt` = -1.0 → `compute_preferred_tag_id` returns **primary** (1) throughout DESCEND_COARSE |
+| 2 | Adapter receives preferred=1 → `select_best_tag` picks primary → `active_tag_id` = 1 |
+| 3 | FSM's `small_tag_detected` = (`active_tag_id == secondary_tag_id`) = (`1 == 2`) = **False** |
+| 4 | `small_tag_first_seen` timer never starts → never transitions to HOLD_ABOVE_TAG |
+| 5 | Drone descends through DESCEND_COARSE until `_is_landed()` triggers → LANDED |
+| 6 | OFFSET_LATERAL and DESCEND_FINAL (where offsets are applied) are never reached |
+
+The secondary tag IS being detected by apriltag_ros (visible in debug view), but the adapter never reports it as `active_tag_id` because the preferred tag never switches from primary.
+
+### How to verify
+
+While the drone is descending, check the rangefinder reading:
+```bash
+ros2 topic echo /dbvf/vehicle_state --field range_alt
+```
+If it shows **-1.0** throughout, RANGEFINDER MAVLink messages are not arriving.
+
+### Where offsets are applied (for reference)
+
+| State | `use_offset` in info dict |
+|-------|--------------------------|
+| DESCEND_COARSE | not set (defaults `False`) |
+| HOLD_ABOVE_TAG | `False` |
+| ALIGN_YAW | `False` |
+| **OFFSET_LATERAL** | **`True`** |
+| **DESCEND_FINAL** | **`True`** (if small tag detected) |
+
+Offsets are consumed in `_velocity_servo()` at `precision_landing_node.py:688-690`:
+```python
+if use_offset:
+    error_x -= self.offset_forward
+    error_y -= self.offset_right
+```
+
+### Possible fixes (not yet implemented)
+
+1. **Add `alt_rel` fallback** — if `range_alt` is sentinel (-1.0), use `vs.alt_rel` (barometric) in `compute_preferred_tag_id` so the preferred tag switch doesn't depend entirely on rangefinder availability
+2. **Request RANGEFINDER stream** — send `REQUEST_DATA_STREAM` or set `SRn_EXTRA3` parameter in ArduPilot to ensure RANGEFINDER messages are forwarded through MAVProxy
+3. **Both** — fallback for robustness + stream config for accuracy
+
+### Files involved
+
+- `precision_landing_node.py:84-95` — `compute_preferred_tag_id()` range_alt gate
+- `mavlink_interface_node.py:27,137,262-263` — RANGE_ALT_SENTINEL, RANGEFINDER handling
+- `config/gazebo-iris-hardmount.parm:28-31` — RNGFND1 configured but stream rate not set
+
+### Resolution
+
+Two-pronged fix:
+
+1. **`alt_rel` fallback in `compute_preferred_tag_id()`** — when `range_alt` is sentinel (-1.0), the function now falls back to `alt_rel` (barometric altitude from `GLOBAL_POSITION_INT`). This ensures the preferred tag switches to secondary during DESCEND_COARSE even without rangefinder data, enabling the 4-phase landing sequence.
+
+2. **`SR0_EXTRA3 10` in `gazebo-iris-hardmount.parm`** — explicitly requests RANGEFINDER messages at 10Hz in SITL. When rangefinder data is available, it is preferred over barometric altitude (more accurate near ground).
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `precision_landing_node.py:84-102` | Added `alt_rel` parameter to `compute_preferred_tag_id()`, fallback logic |
+| `precision_landing_node.py:655-659` | Pass `vs.alt_rel` at call site |
+| `test_state_machine.py` | 4 new tests for alt_rel fallback |
+| `gazebo-iris-hardmount.parm` | Added `SR0_EXTRA3 10` |
+
+### Relationship to other issues
+
+- **ISS-013** (4-phase landing): The 4-phase sequence works correctly IF entered. This issue prevents entry.
+- **ISS-016** (mid-descent pause): The pause in HOLD_ABOVE_TAG is intentional for fine positioning — but it's never reached due to this bug.
