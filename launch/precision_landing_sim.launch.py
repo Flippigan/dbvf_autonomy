@@ -26,9 +26,9 @@ def generate_launch_description():
             ],
             parameters=[{
                 'family': '36h11',
-                'size': 0.6,
-                'tag.ids': [0, 1],
-                'tag.sizes': [0.6, 0.15],
+                'size': 0.15,
+                'tag.ids': [1, 2],
+                'tag.sizes': [0.15, 0.10],
             }],
         ),
 
