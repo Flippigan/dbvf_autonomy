@@ -388,3 +388,49 @@ All config and model files updated to agree on: primary tag = ID 1 @ 0.15m, seco
 | `models/Apriltag36_11_00002/model.sdf` | `0.05 0.05 0.001` | `0.10 0.10 0.001` |
 
 Additional find: `hardware_params.yaml` had the same `secondary_tag_size: 0.05` stale value — included in fix.
+
+---
+
+## ISS-019: 4-phase landing still not activating after ISS-018 config fix
+
+**Date:** 2026-04-05
+**Status:** Open
+**Related:** ISS-018 (config fix applied), ISS-017 (alt_rel fallback applied), ISS-013 (4-phase landing design)
+
+### Symptom
+
+After applying the ISS-018 config fix (all tag IDs, sizes, and Gazebo model now consistent), the drone still:
+
+1. Does **not stop** above the secondary (smaller) tag — HOLD_ABOVE_TAG state never entered
+2. Does **not apply** the lateral offset — offset_forward=1.0, offset_right=1.0 have no visible effect on landing position
+
+### Reproduction
+
+```bash
+# Gazebo + SITL running, precision landing stack launched
+ros2 service call /dbvf/start_precision_landing dbvf_msgs/srv/StartPrecisionLanding \
+  "{target_lat: -35.3633033, target_lon: 149.1657423, offset_forward: 1.0, offset_right: 1.0}"
+```
+
+### What has already been ruled out
+
+- **Stale launch config (ISS-018):** All four launch files now have `tag.ids: [1, 2]`, `tag.sizes: [0.15, 0.10]`. Verified consistent.
+- **Stale YAML config (ISS-018):** All three config files have `secondary_tag_size: 0.10`, correct tag IDs 1/2.
+- **Undersized Gazebo model (ISS-018):** Secondary tag model enlarged from 0.05m to 0.10m.
+- **Missing alt_rel stream (ISS-017):** `SR0_EXTRA3 10` added, `alt_rel` fallback in `compute_preferred_tag_id()`.
+
+### Investigation needed
+
+The config layer is now correct. The issue is likely in the runtime behavior — possible areas:
+
+1. **Is tag ID 2 actually being detected by apriltag_ros?** Check `/apriltag/detections` topic during descent to confirm tag 2 appears.
+2. **Is the tag_detector_adapter switching to tag 2?** Check `/dbvf/tag_status` for `active_tag_id: 2` during descent.
+3. **Is DESCEND_COARSE transitioning to HOLD_ABOVE_TAG?** The transition requires the secondary tag to be the active tag AND `range_alt ≤ slow_descent_altitude`. Check `/dbvf/landing_state` for state transitions.
+4. **Is the offset being stored on the node?** The `StartPrecisionLanding` service stores `offset_forward`/`offset_right` on `self` — verify the service response confirms acceptance.
+5. **Are the OFFSET_LATERAL PID commands actually being sent?** If HOLD_ABOVE_TAG is never reached, OFFSET_LATERAL is never reached either, and offsets are never applied.
+
+### Files likely involved
+
+- `dbvf_autonomy/precision_landing_node.py` — FSM transitions, DESCEND_COARSE → HOLD_ABOVE_TAG guard, offset storage
+- `dbvf_autonomy/tag_detector_adapter_node.py` — tag switching, debounce filter, preferred tag subscription
+- `config/sim_params.yaml` — `slow_descent_altitude`, debounce thresholds
