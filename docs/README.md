@@ -32,13 +32,13 @@ Wait for the drone to reach ~10m altitude and stabilize.
 ### Terminal 4 (or same as 3): Trigger the Landing
 ```bash
 ros2 service call /dbvf/start_precision_landing dbvf_msgs/srv/StartPrecisionLanding \
-  "{target_lat: -35.3632531, target_lon: 149.1657896, offset_forward: 0.0, offset_right: 0.0}"
+  "{target_lat: -35.3633033, target_lon: 149.1657423, offset_forward: 0.0, offset_right: 0.0}"
 ```
 **This is the trigger.** Without this service call, the system sits in IDLE forever.
 
 The `offset_forward` and `offset_right` fields are optional (default 0.0). They shift the landing target so a point other than the camera center ends up over the tag — used for WA landings where the reload mechanism is offset from the camera.
 
-The target coordinates are the GPS location of the AprilTag pad in `iris_runway.sdf` (tag at Gazebo pose `50.0, 1.0`).
+The target coordinates match the WA (AprilTag pad) GPS position from `mission_params.yaml` (`wa_lat` / `wa_lon`).
 
 ### Terminal 5 (optional): View tag detections on camera
 ```bash
@@ -53,9 +53,6 @@ The world origin is in `iris_runway.sdf` under `<spherical_coordinates>`. Tags a
 lat = origin_lat + Y_north / 111000
 lon = origin_lon + X_east / (111000 * cos(origin_lat))
 ```
-For the current tag at `(50.0, 1.0)` with origin `(-35.3632621, 149.1652374)`:
-- lat = -35.3632621 + 1.0/111000 = **-35.3632531**
-- lon = 149.1652374 + 50.0/90546 = **149.1657896**
 
 ---
 
@@ -302,3 +299,73 @@ ros2 topic echo /dbvf/mission_phase    # Current phase (FM1, FM2, FM3, RTH)
 ```bash
 ros2 topic list | grep dbvf
 ```
+
+---
+
+# Arduino Payload Servo — Testing the RC Direct Drop
+
+The Arduino firmware (`arduino/payload_servo_controller/payload_servo_controller.ino`) supports three control sources with this priority: **limit switch > RC channels > serial commands**.
+
+## Upload
+
+1. Open the `.ino` file in Arduino IDE
+2. Board: **Arduino Nano**, Processor: **ATmega328P (Old Bootloader)**
+3. Select the USB serial port (e.g., `/dev/ttyACM0`)
+4. Click **Upload**
+
+## Wiring
+
+| Connection | Arduino Pin | Notes |
+|------------|-------------|-------|
+| Servo signal | D10 | Continuous rotation servo |
+| RC receiver CH12 signal | D5 | Spin direction A (CW) |
+| RC receiver CH13 signal | D6 | Spin direction B (CCW) |
+| Limit switch COM | GND | |
+| Limit switch NO | D2 | Uses internal pull-up |
+| Limit switch NC | — | Leave disconnected |
+
+## Test 1: Serial protocol (no RC receiver connected)
+
+Open Arduino IDE Serial Monitor at **115200 baud**. Send these commands:
+
+| Send | Expected Response | What happens |
+|------|-------------------|--------------|
+| `S0:1500` | `OK` | Servo stops |
+| `S0:1700` | `OK` | Servo spins CW |
+| `S0:1300` | `OK` | Servo spins CCW |
+| `S1:1500` | `ERR:channel out of range` | Nothing moves |
+| `S0:25000` | `ERR:pwm out of range` | Nothing moves |
+| `hello` | `ERR:bad format` | Nothing moves |
+
+With no RC receiver connected, `pulseIn()` times out and returns 0 — the firmware behaves identically to the original serial-only version.
+
+## Test 2: RC CH12 drives servo CW
+
+1. Connect RC receiver CH12 signal wire to **D5**
+2. Power on transmitter, flip CH12 switch **high**
+3. Servo should spin CW (1700us)
+4. Flip CH12 switch **low** — servo holds at last position
+5. Send `S0:1500` via serial to stop
+
+## Test 3: RC CH13 drives servo CCW
+
+1. Connect RC receiver CH13 signal wire to **D6**
+2. Flip CH13 switch **high**
+3. Servo should spin CCW (1300us)
+4. Flip CH13 switch **low** — servo holds
+5. Send `S0:1500` via serial to stop
+
+## Test 4: Limit switch stops servo immediately
+
+1. Wire limit switch: **COM → GND**, **NO → D2**
+2. Start servo spinning via RC CH12 (flip switch high)
+3. Press/trigger the limit switch — servo stops immediately (1500us)
+4. Release limit switch — servo stays stopped (RC switch is still high, but limit has priority only while pressed; once released, RC resumes control)
+5. Flip RC switch low, then send `S0:1500` to confirm serial still works
+
+## Test 5: Limit switch overrides serial commands
+
+1. Send `S0:1700` via serial — servo spins CW
+2. Press limit switch — servo stops
+3. Serial already replied `OK`, but the limit switch overrides the servo output every loop iteration
+4. Release limit switch — servo resumes the serial-commanded PWM (1700us) since no RC signal is present

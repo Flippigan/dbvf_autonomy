@@ -114,7 +114,7 @@ colcon test-result --verbose
 - `test_state_machine.py` — precision landing FSM transitions
 - `test_pid_controller.py` — PID controller logic
 - `test_pose_transform.py` — pose transformation
-- `test_tag_pose_estimation.py` — tag pose estimation
+- `test_tag_pose_estimation.py` — tag pose estimation + tag-relative yaw extraction (ISS-015)
 - `test_descent_rate_clamp.py` — descent rate clamping
 - `test_mission_helpers.py` — ft/m conversion, haversine, tolerance
 - `test_mission_config.py` — config validation, defaults, payload servo params
@@ -140,6 +140,7 @@ colcon build --packages-select dbvf_msgs dbvf_autonomy
 - WA reload mechanism plan: `docs/superpowers/plans/2026-03-30-wa-reload-mechanism.md`
 - Orin Nano integration spec: `docs/superpowers/specs/2026-04-01-orin-nano-integration-design.md`
 - Per-landing offset spec: `docs/superpowers/specs/2026-04-01-per-landing-offset-design.md`
+- ISS-015 tag yaw plan: `docs/superpowers/plans/2026-04-02-iss015-tag-relative-yaw.md`
 - Bug log: `docs/superpowers/Log/`
 
 ## Team Integration Docs

@@ -20,6 +20,50 @@ D3, D5, D6, D9, D10, D11 (marked with `~` on the board). D9 is used by default.
 
 Uses the Arduino `Servo` library instead of the Adafruit PWM Servo Driver library. The serial protocol (`S<channel>:<pwm_us>\n` -> `OK\n` / `ERR:<reason>\n`) remains unchanged — the `arduino_interface_node` requires no modifications.
 
+### Power Supply Requirements
+
+| Component | Typical Draw |
+|-----------|-------------|
+| Arduino Nano | ~50 mA |
+| Standard hobby servo (idle) | ~10-50 mA |
+| Standard hobby servo (moving, loaded) | ~200-800 mA |
+| Standard hobby servo (stall) | ~1-2 A |
+
+**Recommended PSU output: 2A** for a standard 9g/SG90-class servo (Nano + servo under load + stall headroom). For higher-torque metal-gear servos (e.g. MG996R), use **3A** (stall up to 2.5A).
+
+Check your servo's datasheet for stall current and add ~0.5A margin.
+
+### Ground Sharing
+
+The external PSU ground must be shared between the Arduino Nano and the servo. Use a Y-split (solder joint, terminal block, or breadboard ground rail) so both devices reference the same ground potential. Without this, the D9 PWM signal has no common voltage reference and the servo won't respond reliably.
+
+```
+                    ┌─────────────────────┐
+                    │    External PSU      │
+                    │    (5-6V supply)     │
+                    │  [+] ──────────┐    │
+                    │  [-] ──────┐   │    │
+                    └────────────┼───┼────┘
+                                 │   │
+                                 │   │  VCC (red)
+                                 │   └──────────────┐
+                                 │                   │
+                         GND from PSU                │
+                                 │                   │
+                                 ├───────────┐       │
+                                 │    Y-split │      │
+                                 │    (ground)│      │
+                                 ▼            ▼      ▼
+                          ┌──────────┐ ┌──────────────────┐
+                          │ Arduino  │ │  Payload Servo    │
+                          │  Nano    │ │                   │
+                          │ GND pin  │ │ GND (brown/black) │
+                          │          │ │ VCC (red)         │
+                          │ D9  pin ─┼─▶ Signal (orange)  │
+                          │ (PWM ~)  │ └──────────────────┘
+                          └──────────┘
+```
+
 ### Previous: PCA9685 Setup (removed)
 
 Previously used an Adafruit PCA9685 over I2C:

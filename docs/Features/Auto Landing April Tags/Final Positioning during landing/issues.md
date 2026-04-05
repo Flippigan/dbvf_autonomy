@@ -287,3 +287,90 @@ Two-pronged fix:
 
 - **ISS-013** (4-phase landing): The 4-phase sequence works correctly IF entered. This issue prevents entry.
 - **ISS-016** (mid-descent pause): The pause in HOLD_ABOVE_TAG is intentional for fine positioning — but it's never reached due to this bug.
+- **ISS-018**: Despite this fix, the symptom persists — see ISS-018 below.
+
+---
+
+## ISS-018: 4-phase landing still not entered after ISS-017 fix
+
+**Date:** 2026-04-05
+**Status:** Open — root cause identified (stale launch config + small tag)
+**Related:** ISS-017 (fix applied but symptom persists)
+
+### Symptom
+
+After applying the ISS-017 fix (`alt_rel` fallback in `compute_preferred_tag_id()` + `SR0_EXTRA3 10` stream rate param), the drone still:
+
+1. Does **not pause** above the smaller tag (HOLD_ABOVE_TAG never entered)
+2. Does **not move** to the offset specified in `StartPrecisionLanding` (offset_forward=0.5, offset_right=0.5)
+3. FSM goes APPROACH → SEARCH → (stays in SEARCH for extended period) → eventually DESCEND_COARSE → LANDED
+
+### Diagnostic data collected (2026-04-05)
+
+Monitored `/dbvf/vehicle_state`, `/dbvf/tag_status`, `/dbvf/cmd/preferred_tag_id`, `/dbvf/landing_state` during a full landing attempt:
+
+| Observation | Data |
+|-------------|------|
+| `range_alt` | **Working** (not sentinel). Decreases from ~6.7m to ~1.2m, then holds. SR0_EXTRA3 fix effective. |
+| `alt_rel` | **Working**. Tracks range_alt, decreases from ~6.7m to ~1.0m (min_search_altitude). |
+| `preferred_tag_id` | **Always 1** for entire capture. Never switches to 2 because FSM never enters DESCEND_COARSE during capture window. |
+| `tag_status` | **No tags detected** at >3m altitude. **Flickering** detection of tag 1 at 2-3m (true/false alternating). **Stable** tag 1 detection at ~1.0m. **Tag 2 never detected.** |
+| `landing_state` | APPROACH → SEARCH. Stays in SEARCH. |
+| `active_tag_id` | Always 1 or -1. **Never 2.** |
+
+### Root cause
+
+**Two compounding issues:**
+
+#### 1. Stale apriltag_ros config in `precision_landing_sim.launch.py`
+
+```python
+# CURRENT (wrong):
+'tag.ids': [0, 1],
+'tag.sizes': [0.6, 0.15],
+
+# CORRECT (matches world and other launch files):
+'tag.ids': [1, 2],
+'tag.sizes': [0.15, 0.10],
+```
+
+The Gazebo world (`iris_runway.sdf`) has tags **ID 1** (0.15m) and **ID 2** (0.05m model / 0.10m in config). Tag ID 0 does **not exist** — it was removed when the tag layout was restructured. Three other launch files (`mission_sim`, `precision_landing_real`, `mission_real`) already have the correct `[1, 2]` config. Only `precision_landing_sim.launch.py` was missed.
+
+While apriltag_ros still detects tag 2 even without it in `tag.ids` (it only affects pose size estimation, not detection filtering), the wrong default size (0.6m instead of 0.05m) causes wildly incorrect pose estimates that may confuse downstream angle calculations.
+
+#### 2. Secondary tag model is 0.05m — too small for reliable detection
+
+The `Apriltag36_11_00002` Gazebo model is 0.05m (5cm). At the altitudes where the preferred tag switches (≤2.0m), this tag is ~16 pixels on camera — marginal for AprilTag detection. The flickering detection pattern observed for tag 1 (0.15m) at 2-3m confirms that even larger tags struggle at these distances. Tag 2 at 0.05m is never detected during the landing.
+
+Note: `sim_params.yaml` and other launch files reference `secondary_tag_size: 0.05` / `tag.sizes: [0.15, 0.10]` — there's a discrepancy between the model (0.05m) and config (0.10m) that needs resolving.
+
+### Also found: `jetson_params.yaml` has stale tag IDs
+
+```yaml
+# CURRENT (wrong):
+primary_tag_id: 0
+secondary_tag_id: 1
+
+# CORRECT:
+primary_tag_id: 1
+secondary_tag_id: 2
+```
+
+### Fix needed
+
+1. **Fix `precision_landing_sim.launch.py`**: Change `tag.ids: [0, 1]` → `[1, 2]`, `tag.sizes: [0.6, 0.15]` → `[0.15, 0.10]`
+2. **Fix `jetson_params.yaml`**: Change tag IDs from 0/1 to 1/2
+3. **Increase secondary tag model size**: Enlarge `Apriltag36_11_00002` from 0.05m to 0.10m (matching config and improving detectability)
+4. **Reconcile tag size references**: Ensure model, configs, and launch files all agree on 0.10m for secondary tag
+
+### Files involved
+
+- `launch/precision_landing_sim.launch.py:27-32` — stale `tag.ids: [0, 1]`
+- `config/jetson_params.yaml` — stale `primary_tag_id: 0, secondary_tag_id: 1`
+- `src/ardupilot_gazebo/models/Apriltag36_11_00002/` — 0.05m model, needs 0.10m
+- `config/sim_params.yaml:14` — `secondary_tag_size: 0.05` (should be 0.10)
+
+### Relationship to other issues
+
+- **ISS-017** (range_alt fallback): ISS-017 fix is correct and verified working (range_alt is now valid). But the symptom persists because tag 2 is never detected — a separate issue.
+- **ISS-013** (4-phase landing): The 4-phase sequence would work IF tag 2 were detected. This issue blocks entry.
