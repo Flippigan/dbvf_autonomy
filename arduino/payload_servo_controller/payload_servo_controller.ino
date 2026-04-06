@@ -3,8 +3,9 @@
 // Protocol: S<channel>:<pwm_us>\n -> OK\n or ERR:<reason>\n
 // Identical to arduino_interface_node protocol.
 //
-// Also reads RC receiver channels for manual payload drop control,
-// with a limit switch for immediate stop. Priority: limit > RC > serial.
+// Also reads RC receiver channels for manual payload drop control.
+// RC switch above threshold = move servo, below = stop.
+// Priority: RC > serial.
 //
 // Hardware: continuous rotation servo on pin D10 (channel 0).
 
@@ -15,9 +16,8 @@ static const unsigned long BAUD_RATE = 115200;
 
 // ── Pin assignments ──
 static const int SERVO_PIN      = 10;
-static const int RC_CH12_PIN    = 5;   // RC receiver CH12 — spin direction A
-static const int RC_CH13_PIN    = 6;   // RC receiver CH13 — spin direction B
-static const int LIMIT_SW_PIN   = 2;   // Micro limit switch (NC→D2, COM→GND)
+static const int RC_CH11_PIN    = 5;   // RC receiver CH11 — spin CW
+static const int RC_CH12_PIN    = 6;   // RC receiver CH12 — spin CCW
 
 // ── Servo PWM values (continuous rotation) ──
 static const int CW_PWM         = 1700;  // Direction A speed
@@ -25,40 +25,28 @@ static const int CCW_PWM        = 1300;  // Direction B speed
 static const int STOP_PWM       = 1500;  // Stop
 
 // ── RC thresholds ──
-static const int RC_THRESHOLD   = 1700;  // PWM above this = "switch high"
+static const int RC_THRESHOLD   = 1500;  // PWM above this = "switch high"
 static const unsigned long RC_TIMEOUT_US = 25000;  // pulseIn timeout (μs)
 
 Servo payloadServo;
 
 String inputBuffer = "";
-bool forceOverride = false;  // serial "FORCE" disables limit switch
-bool prevLimitPressed = false;  // edge detection for limit switch
-bool limitLatched = false;       // true after rising edge, cleared by new command
 
 void setup() {
   Serial.begin(BAUD_RATE);
   payloadServo.attach(SERVO_PIN);
+  pinMode(RC_CH11_PIN, INPUT_PULLUP);
   pinMode(RC_CH12_PIN, INPUT_PULLUP);
-  pinMode(RC_CH13_PIN, INPUT_PULLUP);
-  pinMode(LIMIT_SW_PIN, INPUT_PULLUP);
   delay(10);
 }
 
 void loop() {
-  // 1. Handle serial commands (existing — unchanged)
+  // 1. Handle serial commands
   while (Serial.available()) {
     char c = Serial.read();
     if (c == '\r') continue;  // strip carriage return
     if (c == '\n') {
-      if (inputBuffer == "FORCE") {
-        forceOverride = true;
-        Serial.println("OK:force on");
-      } else if (inputBuffer == "NOFORCE") {
-        forceOverride = false;
-        Serial.println("OK:force off");
-      } else {
-        handleCommand(inputBuffer);
-      }
+      handleCommand(inputBuffer);
       inputBuffer = "";
     } else {
       inputBuffer += c;
@@ -66,30 +54,25 @@ void loop() {
   }
 
   // 2. Read RC channels via pulseIn (blocks up to RC_TIMEOUT_US each)
+  unsigned long ch11_pw = pulseIn(RC_CH11_PIN, HIGH, RC_TIMEOUT_US);
   unsigned long ch12_pw = pulseIn(RC_CH12_PIN, HIGH, RC_TIMEOUT_US);
-  unsigned long ch13_pw = pulseIn(RC_CH13_PIN, HIGH, RC_TIMEOUT_US);
 
-  // 3. Limit switch edge detection: stop once on contact, then allow
-  //    new commands to move servo off the switch.
-  bool limitPressed = (digitalRead(LIMIT_SW_PIN) == LOW);
-  if (limitPressed && !prevLimitPressed) {
-    // Rising edge: switch just depressed — stop and latch
-    limitLatched = true;
+  // DEBUG: print RC readings every loop
+  Serial.print("RC11=");
+  Serial.print(ch11_pw);
+  Serial.print(" RC12=");
+  Serial.println(ch12_pw);
+
+  // 3. RC control: above threshold = move, below = stop
+  if (ch11_pw > RC_THRESHOLD) {
+    payloadServo.writeMicroseconds(CW_PWM);
+  } else if (ch12_pw > RC_THRESHOLD) {
+    payloadServo.writeMicroseconds(CCW_PWM);
+  } else if (ch11_pw > 0 || ch12_pw > 0) {
+    // Signal present but below threshold — stop servo
     payloadServo.writeMicroseconds(STOP_PWM);
   }
-  prevLimitPressed = limitPressed;
-
-  // 4. Priority: latched limit > RC CH12 > RC CH13 > serial
-  if (limitLatched && !forceOverride) {
-    // Stay stopped until a new serial or RC command clears the latch
-  } else if (ch12_pw > RC_THRESHOLD) {
-    limitLatched = false;
-    payloadServo.writeMicroseconds(CW_PWM);
-  } else if (ch13_pw > RC_THRESHOLD) {
-    limitLatched = false;
-    payloadServo.writeMicroseconds(CCW_PWM);
-  }
-  // else: no RC override — serial commands retain control
+  // else: no RC signal at all — serial commands retain control
 }
 
 void handleCommand(const String& cmd) {
@@ -118,7 +101,6 @@ void handleCommand(const String& cmd) {
     return;
   }
 
-  limitLatched = false;  // new command clears limit latch
   payloadServo.writeMicroseconds(pwm_us);
 
   Serial.println("OK");
