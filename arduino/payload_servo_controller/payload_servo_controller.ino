@@ -20,8 +20,8 @@ static const int RC_CH11_PIN    = 5;   // RC receiver CH11 — spin CW
 static const int RC_CH12_PIN    = 6;   // RC receiver CH12 — spin CCW
 
 // ── Servo PWM values (continuous rotation) ──
-static const int CW_PWM         = 1700;  // Direction A speed
-static const int CCW_PWM        = 1300;  // Direction B speed
+static const int CW_PWM         = 2500;  // Direction A max speed
+static const int CCW_PWM        = 500;   // Direction B max speed
 static const int STOP_PWM       = 1500;  // Stop
 
 // ── RC thresholds ──
