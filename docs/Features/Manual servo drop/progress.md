@@ -1,99 +1,83 @@
 # RC Direct Drop Mechanism — Progress
 
-## Status: Hardware Testing In Progress
+## Status: Working — RC servo control verified
 
 ## What Was Done
 
 ### Firmware Changes (payload_servo_controller.ino)
 
-Added three new inputs to the existing serial-controlled servo firmware:
+RC-controlled servo with two channels:
 
 | Input | Pin | Purpose |
 |-------|-----|---------|
-| RC CH11 | D5 | Spin servo CW (1700us) via RC switch |
-| RC CH12 | D6 | Spin servo CCW (1300us) via RC switch |
-| Limit switch | D2 | Stop servo (1500us) when depressed |
+| RC CH11 | D5 | Spin servo CW (2500us max speed) via RC switch |
+| RC CH12 | D6 | Spin servo CCW (500us max speed) via RC switch |
 
-**Priority cascade:** latched limit switch > RC channels > serial commands
+**Logic:** RC switch above 1200us threshold = move servo, below = stop. When no RC signal present, serial commands retain control.
 
-When no RC receiver is connected, firmware behaves identically to the original serial-only version.
+**Priority:** RC > serial commands.
 
 ### Wiring (Current Setup)
 
 | Connection | Arduino Pin | Notes |
 |------------|-------------|-------|
 | Servo signal | D10 | Continuous rotation servo |
-| RC receiver CH11 signal | D5 | CW direction |
-| RC receiver CH12 signal | D6 | CCW direction |
-| Limit switch COM | GND | |
-| Limit switch | D2 | INPUT_PULLUP |
+| RC receiver CH11 signal | D5 | CW direction (from Cube Orange SERVO11 output) |
+| RC receiver CH12 signal | D6 | CCW direction (from Cube Orange SERVO12 output) |
 | Power from Cube Orange | 5V + GND | Do not use VIN |
 
-### Limit Switch Behavior (2026-04-05 debugging)
+### Cube Orange Configuration Required
 
-Actual behavior with `INPUT_PULLUP` on D2:
-- **Undepressed** (at rest): D2 reads HIGH — servo moves freely
-- **Depressed**: D2 reads LOW — servo stops
+- `SERVO11_FUNCTION = 61` (RCPassThru for RC input 11)
+- `SERVO12_FUNCTION = 62` (RCPassThru for RC input 12)
 
-Code uses `digitalRead(LIMIT_SW_PIN) == LOW` to detect the depressed state.
+Without these, the Cube Orange outputs a fixed ~960us regardless of RC switch position.
 
-**Note:** Initial code assumed NC wiring (depressed = HIGH), but diagnostic testing confirmed the opposite polarity. The logic was inverted to match actual hardware readings.
+### Pin-Change Interrupt RC Reading (2026-04-05)
 
-### Edge-Triggered Limit Switch (2026-04-05)
+Replaced blocking `pulseIn()` with pin-change interrupts (`PCINT2_vect` on PORTD). Two sequential `pulseIn` calls blocked ~25ms each and caused one channel to always miss its pulse. The ISR reads `PIND` directly and XORs with previous state to detect which pin actually changed — critical because PCINT fires for ANY pin change in the port group.
 
-The limit switch uses **edge detection + latch** instead of level-based stopping:
-- **Rising edge** (undepressed → depressed): servo stops immediately, latch is set
-- **While latched**: servo stays stopped — prevents drift
-- **New serial or RC command**: clears the latch, allowing the servo to move off the switch
-
-This prevents the servo from being permanently locked when the mechanism physically holds the switch depressed.
-
-### RC Pin Mode Fix (2026-04-05)
-
-RC input pins changed from `INPUT` to `INPUT_PULLUP` to prevent floating pin noise from generating spurious pulseIn readings when no RC receiver is connected.
+Stale readings (>100ms since last pulse) are treated as no signal, allowing serial commands to work when no RC receiver is connected.
 
 ### Serial \r Handling (2026-04-05)
 
-Added `\r` stripping in the serial input loop so FORCE/NOFORCE commands work regardless of Serial Monitor line ending setting (NL, CR, or Both).
-
-### Force Override (for positioning)
-
-Serial commands `FORCE` and `NOFORCE` toggle a flag that bypasses the limit switch check. Used to reposition the servo past the switch during setup:
-
-1. Send `FORCE` in Serial Monitor (115200 baud) — responds `OK:force on`
-2. Send `S0:1700` or `S0:1300` to rotate freely
-3. Send `NOFORCE` to re-enable the limit switch — responds `OK:force off`
+Added `\r` stripping in the serial input loop so commands work regardless of Serial Monitor line ending setting.
 
 ### Arduino IDE Settings
 
 - Board: **Arduino Nano**
 - Processor: **ATmega328P (Old Bootloader)**
 - Baud: 115200
+- Port: /dev/ttyUSB0
 
 ## Verified
 
-- [x] Serial protocol works (S0:1500, S0:1700, S0:1300, error cases)
-- [x] Limit switch stops servo when depressed (edge-triggered + latch)
-- [x] Servo can be commanded off switch after limit latch (new command clears latch)
-- [x] FORCE/NOFORCE override allows positioning past limit switch
-- [x] No spurious servo commands when RC receiver disconnected (INPUT_PULLUP fix)
-- [ ] RC CH11 drives servo CW
-- [ ] RC CH12 drives servo CCW
-- [ ] Limit switch overrides RC channels
-- [ ] Full integration with RC receiver on drone
+- [x] Serial protocol works (S0:1500, S0:2500, S0:500, error cases)
+- [x] No spurious servo commands when RC receiver disconnected (INPUT_PULLUP + stale detection)
+- [x] RC CH11 drives servo CW (max speed 2500us)
+- [x] RC CH12 drives servo CCW (max speed 500us)
+- [x] Both RC channels read simultaneously (pin-change interrupts)
+- [x] Servo stops when RC switch returned to low position
+- [ ] Full integration with RC receiver on drone (in-flight test)
 
 ## Bugs Fixed (2026-04-05)
 
 | Bug | Root Cause | Fix |
 |-----|-----------|-----|
-| Servo won't rotate when switch undepressed | Limit switch polarity inverted — code checked `== HIGH` but undepressed reads HIGH | Changed to `== LOW` |
-| Servo permanently locked after hitting switch | Level-based limit check ran every loop, overwriting commands | Edge detection + latch, cleared by new command |
+| RC channels not activating servo | RC_THRESHOLD was 1700, CH12 high output was ~1495 | Lowered threshold to 1200 |
+| Only one RC channel readable at a time | Two sequential `pulseIn()` calls blocked ~25ms each, second always missed | Replaced with PCINT2 pin-change interrupts |
+| Wrong channel detected by interrupt | PCINT fires for any pin change in port; ISR processed pins that didn't change | Added XOR edge detection with `prev_port_state` |
 | Floating RC pins causing erratic behavior | D5/D6 set to `INPUT` with no receiver | Changed to `INPUT_PULLUP` |
-| FORCE command returns ERR:bad format | Serial Monitor sends `\r\n`, `\r` stayed in buffer | Added `\r` stripping |
+| Limit switch blocking RC commands | Limit latch checked before RC branches, RC could never clear it | Removed limit switch logic (not needed for competition) |
+
+## Removed Features (2026-04-05)
+
+- **Limit switch** (D2) — removed entirely, not needed for competition drop mechanism
+- **FORCE/NOFORCE** serial commands — only existed for limit switch bypass
 
 ## Files Modified
 
-- `arduino/payload_servo_controller/payload_servo_controller.ino` — added RC input, limit switch, force override, edge detection, INPUT_PULLUP, \r strip
+- `arduino/payload_servo_controller/payload_servo_controller.ino` — RC interrupt reading, simplified logic, removed limit switch
 
 ## Design Docs
 
