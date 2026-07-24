@@ -5,3 +5,7 @@ __pycache__/
 # These are cloned into the workspace src/ directory, not tracked here
 # src/apriltag_ros/
 # src/apriltag_msgs/
+
+# Separate repo with its own remote - must NOT be swallowed as a gitlink.
+# dbvf_msgs is an independent silo that happens to live inside this tree.
+dbvf_msgs/
