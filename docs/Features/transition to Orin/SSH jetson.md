@@ -19,7 +19,7 @@ This works regardless of what WiFi networks each device is on.
 
 ## GitHub Remote (Primary Deployment Method)
 
-The `dbvf_autonomy` repo is hosted at **https://github.com/Flippigan/dbvf_autonomy** (private). The `dbvf_msgs` package is included in the same repo.
+The `dbvf_autonomy` repo is hosted at **https://github.com/Flippigan/dbvf_autonomy** (public). The `dbvf_msgs` package is a separate repo at **https://github.com/Flippigan/dbvf_msgs**.
 
 ### Jetson Setup (already done)
 
