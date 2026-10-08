@@ -1,6 +1,6 @@
 # RC Direct Drop Mechanism — Progress
 
-## Status: Working — RC servo control verified
+## Status: Complete — RC servo control verified and committed
 
 ## What Was Done
 
@@ -8,12 +8,12 @@
 
 RC-controlled servo with two channels:
 
-| Input | Pin | Purpose |
-|-------|-----|---------|
-| RC CH11 | D5 | Spin servo CW (2500us max speed) via RC switch |
-| RC CH12 | D6 | Spin servo CCW (500us max speed) via RC switch |
+| Input | Pin | Direction | Servo PWM |
+|-------|-----|-----------|-----------|
+| RC CH11 | D5 | CCW | 0us (max speed) |
+| RC CH12 | D6 | CW | 2500us (max speed) |
 
-**Logic:** RC switch above 1200us threshold = move servo, below = stop. When no RC signal present, serial commands retain control.
+**Logic:** RC switch above 1200us threshold = move servo at max speed, below = stop (1500us). When no RC signal present, serial commands retain control.
 
 **Priority:** RC > serial commands.
 
@@ -54,8 +54,8 @@ Added `\r` stripping in the serial input loop so commands work regardless of Ser
 
 - [x] Serial protocol works (S0:1500, S0:2500, S0:500, error cases)
 - [x] No spurious servo commands when RC receiver disconnected (INPUT_PULLUP + stale detection)
-- [x] RC CH11 drives servo CW (max speed 2500us)
-- [x] RC CH12 drives servo CCW (max speed 500us)
+- [x] RC CH11 drives servo CCW (max speed 0us)
+- [x] RC CH12 drives servo CW (max speed 2500us)
 - [x] Both RC channels read simultaneously (pin-change interrupts)
 - [x] Servo stops when RC switch returned to low position
 - [ ] Full integration with RC receiver on drone (in-flight test)

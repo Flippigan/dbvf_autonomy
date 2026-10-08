@@ -22,7 +22,7 @@ static const int RC_CH12_PIN    = 6;   // RC receiver CH12 — spin CCW
 
 // ── Servo PWM values (continuous rotation) ──
 static const int CW_PWM         = 2500;  // Direction A max speed
-static const int CCW_PWM        = 500;   // Direction B max speed
+static const int CCW_PWM        = 0;     // Direction B max speed
 static const int STOP_PWM       = 1500;  // Stop
 
 // ── RC thresholds ──
@@ -116,9 +116,9 @@ void loop() {
 
   // 3. RC control: above threshold = move, below = stop
   if (pw11 > RC_THRESHOLD) {
-    payloadServo.writeMicroseconds(CW_PWM);
-  } else if (pw12 > RC_THRESHOLD) {
     payloadServo.writeMicroseconds(CCW_PWM);
+  } else if (pw12 > RC_THRESHOLD) {
+    payloadServo.writeMicroseconds(CW_PWM);
   } else if (pw11 > 0 || pw12 > 0) {
     payloadServo.writeMicroseconds(STOP_PWM);
   }

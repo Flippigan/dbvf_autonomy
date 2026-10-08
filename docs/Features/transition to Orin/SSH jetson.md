@@ -6,7 +6,6 @@ The Jetson and host PC are connected via USB-C. The Jetson appears at `192.168.5
 
 ```bash
 ssh badgerfly@192.168.55.1
-# Password: 12345678
 ```
 
 This works regardless of what WiFi networks each device is on.
@@ -56,10 +55,10 @@ source install/setup.bash
 
 ## Notes
 
-- Jetson user: `badgerfly`, password: `12345678`
+- Jetson user: `badgerfly`
 - The USB network interface on the host is `enxf2cb49b1ecb6` at `192.168.55.100`
 - The Jetson does not need WiFi for SSH — the USB-C data cable handles it
-- `sshpass` is available on the dev machine for scripted SSH: `sshpass -p '12345678' ssh badgerfly@192.168.55.1 "<command>"`
+- `sshpass` is available on the dev machine for scripted SSH: `sshpass -p '<password>' ssh badgerfly@192.168.55.1 "<command>"`
 - If the Jetson needs internet (e.g., for apt install), share the host's connection over USB:
 
 ```bash

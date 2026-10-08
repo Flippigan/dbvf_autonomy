@@ -63,7 +63,7 @@ Never `from dbvf_autonomy.msg import ...` — that path does not exist.
 - Lazy reconnect on each service call if serial is `None`
 - Config: `serial_port` (/dev/ttyACM0), `baud_rate` (115200), `serial_timeout_s` (1.0)
 - Pure functions `format_servo_command()` and `parse_servo_response()` are testable without ROS2
-- Arduino firmware: `arduino/payload_servo_controller/payload_servo_controller.ino`, servo on pin D10, RC CH11 on D5 (CW, 2500us), RC CH12 on D6 (CCW, 500us) via PCINT2 interrupts. RC above 1200us threshold = move, below = stop. No limit switch. Requires Cube Orange `SERVO11_FUNCTION=61`, `SERVO12_FUNCTION=62`. Requires "ATmega328P (Old Bootloader)" board setting for upload
+- Arduino firmware: `arduino/payload_servo_controller/payload_servo_controller.ino`, servo on pin D10, RC CH11 on D5 (CCW, 0us), RC CH12 on D6 (CW, 2500us) via PCINT2 interrupts. RC above 1200us threshold = move at max speed, below = stop. No limit switch. Requires Cube Orange `SERVO11_FUNCTION=61`, `SERVO12_FUNCTION=62`. Requires "ATmega328P (Old Bootloader)" board setting for upload
 
 ### servo_test_node
 - Interactive CLI tool for bench-testing payload servos through competition mission phases
